@@ -1,4 +1,4 @@
-module github.com/JesseCoretta/go-ldapsyntax
+module github.com/go-directory/syntax
 
 go 1.25.5
 
