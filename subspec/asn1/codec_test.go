@@ -3,7 +3,7 @@ package asn1
 import (
 	"testing"
 
-	"github.com/JesseCoretta/go-ldapsubspec"
+	"github.com/go-directory/syntax/subspec"
 )
 
 func BenchmarkCodecRoundtrip(b *testing.B) {

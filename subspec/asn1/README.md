@@ -8,8 +8,8 @@ Package asn1 offers a basic ASN.1 DER encoder and decoder of subspec.SubtreeSpec
 package main
 
 import (
-	"github.com/JesseCoretta/go-ldapsubspec"
-	ssasn1 "github.com/JesseCoretta/go-ldapsubspec/asn1"
+	"github.com/go-directory/syntax/subspec"
+	ssasn1 "github.com/go-directory/syntax/subspec/asn1"
 )
 
 func main() {

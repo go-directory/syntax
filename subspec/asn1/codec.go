@@ -11,7 +11,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/JesseCoretta/go-ldapsubspec"
+	"github.com/go-directory/syntax/subspec"
 )
 
 // Universal tags
