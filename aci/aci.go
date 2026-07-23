@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/JesseCoretta/go-ldapfilter"
+	"github.com/go-directory/syntax/filter"
 	"github.com/JesseCoretta/go-shifty"
 )
 

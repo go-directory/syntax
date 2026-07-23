@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JesseCoretta/go-ldapfilter"
+	"github.com/go-directory/syntax/filter"
 )
 
 func ExampleScope() {
