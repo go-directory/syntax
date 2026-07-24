@@ -14,7 +14,7 @@ func TestSubstringAssertion(t *testing.T) {
 		`subst*`,
 		`*ubstr`,
 	} {
-		if ssa, err := New(raw); err != nil {
+		if ssa, err := NewSubstringAssertion(raw); err != nil {
 			t.Errorf("%s[%d] failed: %v", t.Name(), idx, err)
 		} else if got := ssa.String(); got != raw {
 			t.Errorf("%s[%d] failed:\n\twant:%s\n\tgot: %s\n",

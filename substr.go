@@ -107,10 +107,10 @@ func (r SubstringAssertion) String() (s string) {
 }
 
 /*
-New returns an error following an analysis of x in the context of a
-Substring Assertion.
+NewSubstringAssertion returns an error following an analysis of x
+in the context of a Substring Assertion.
 */
-func New(x any) (SubstringAssertion, error) {
+func NewSubstringAssertion(x any) (SubstringAssertion, error) {
 	return marshalSubstringAssertion(x)
 }
 
