@@ -659,8 +659,11 @@ func objectIdentifierMatch(a, b any) (result bool, err error) {
 	}
 
 	if OIDMap == nil || len(OIDMap) == 0 {
-		err = errorUnknownOIDDescr
-		return
+		// no resolution available. Try a
+		// simple cmp as string values.
+		str1, _ := assertString(a, 1, "string")
+		str2, _ := assertString(b, 1, "string")
+		return str1 == str2, nil
 	}
 
 	if err1 != nil {
