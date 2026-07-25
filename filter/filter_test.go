@@ -434,7 +434,7 @@ func TestFilter_codecov(t *testing.T) {
 
 	var substrings FilterSubstrings
 	_ = substrings.String()
-	substrings.Substrings = substr.SubstringAssertion{Any: substr.AssertionValue(`blarg`)}
+	substrings.Substrings = syntax.SubstringAssertion{Any: syntax.AssertionValue(`blarg`)}
 	substrings.Index(9)
 	substrings.Len()
 	substrings.IsZero()

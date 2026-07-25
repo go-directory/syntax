@@ -921,7 +921,7 @@ func parseItemFilter(input string) (f Filter, err error) {
 			syntax.AssertionValue(after)}
 	} else if strings.Contains(after, "*") {
 		var ssa syntax.SubstringAssertion
-		if ssa, err = syntax.New(after); err == nil {
+		if ssa, err = syntax.NewSubstringAssertion(after); err == nil {
 			err = checkFilterOIDs(pre, ``)
 			f = FilterSubstrings{
 				Type:       AttributeDescription(pre),
