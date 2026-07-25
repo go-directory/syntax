@@ -48,7 +48,7 @@ func normalize(s string) string {
 		c := b[i]
 		cls := classTable[c]
 		if cls == 0 {
-			// vowels and others → skip
+			// vowels and others -> skip
 			continue
 		}
 		if cls != prev {
@@ -60,7 +60,7 @@ func normalize(s string) string {
 	return string(out)
 }
 
-// levenshtein distance (pure Go)
+// levenshtein distance
 func levenshtein(a, b string) int {
 	la := len(a)
 	lb := len(b)
