@@ -737,6 +737,8 @@ checks in conformance with [§ 4.2.25 of RFC 4517] and [§ 4.2.26 of RFC 4517],
 particularly where descr values -- as opposed to dotted decimal OIDs -- are
 encountered.
 
+Set this variable to nil to disable OID resolution.
+
 [§ 4.2.25 of RFC 4517]: https://www.rfc-editor.org/rfc/rfc4517.html#section-4.2.25
 [§ 4.2.26 of RFC 4517]: https://www.rfc-editor.org/rfc/rfc4517.html#section-4.2.26
 */

@@ -51,6 +51,30 @@ func TestSubtreeSpecification_codecov(t *testing.T) {
 
 	_, _ = subtreeRefinement("any:{...}")
 
+	_ = mkerr()
+	_ = errorBadLength(``, 0)
+	_ = streq(`a`, `b`)
+	_ = lc("HELLO")
+	_, _ = assertString([]byte(`test`), 0, `...`)
+	_, _ = assertString(`i`, 2, `...`)
+	_, _ = assertRunes([]rune(`i`), true)
+	_, _ = assertRunes([]byte(`i`), true)
+	_, _ = assertRunes(`i`, true)
+	_, _ = assertRunes(``, false)
+	_, _ = assertRunes('i', true)
+	_, _ = assertRunes(byte('i'), true)
+	isSafeUTF8(struct{}{})
+	isSafeUTF8(`"""`)
+	isSafeUTF1(`界`)
+	isSafeUTF1(`1234`)
+	isSafeUTF2(`1234`)
+	isSafeUTF3(`1234`)
+	isSafeUTF4(`1234`)
+	isSafeUTF4(`1234`)
+	isSafeUTF8(`1234界`)
+	isSafeUTF8(`"""""`)
+	isSafeUTF8(nil)
+
 	var spec SubtreeSpecification
 	spec.Base = "cn=1,cn=2,cn=3"
 	spec.ChopSpecification.Exclusions = SpecificExclusions{
@@ -59,10 +83,14 @@ func TestSubtreeSpecification_codecov(t *testing.T) {
 	spec.SpecificationFilter = RefinementAnd{}
 	_ = spec.String()
 
+	_, _, _ = subtreeExclusions(" {", 0)
 	_, _, _ = subtreeExclusions("{", 0)
 	_, _, _ = subtreeExclusions("{chopBefore:cn=y,chopAfter:cn=x}", 0)
+	_, _, _ = subtreeExclusions("{chopBefore:cn=y,slopAfter:cn=x}", 0)
 
 	var orref RefinementOr
+	orref.Verify()
+	orref.Choice()
 	orref.Push(nil)
 	_ = orref.String()
 	orref.Index(2)
@@ -73,6 +101,8 @@ func TestSubtreeSpecification_codecov(t *testing.T) {
 	orref = append(orref, RefinementItem(``))
 
 	var andref RefinementAnd
+	andref.Choice()
+	andref.Verify()
 	andref.Push(nil)
 	_ = andref.String()
 	andref.Index(2)
@@ -82,29 +112,42 @@ func TestSubtreeSpecification_codecov(t *testing.T) {
 	andref.Push("item:2.6.5.5")
 	andref = append(andref, RefinementItem(``))
 
+	var ln LocalName
+	ln.IsZero()
+
 	var excls SpecificExclusions
 	_ = excls.String()
+	_ = excls.Len()
+	_ = excls.IsZero()
 
 	var excl SpecificExclusion
 	_ = excl.String()
+	_ = excl.IsZero()
 
 	var iref RefinementItem
 	iref.Choice()
 	_ = iref.String()
 	iref.Len()
+	iref.Verify()
 	iref.Index(1)
 	iref.isRefinement()
 
 	var nref RefinementNot
 	_ = nref.String()
 	nref.Len()
+	nref.Choice()
+	nref.Verify()
 	nref.Index(1)
 	nref.isRefinement()
+	nref = RefinementNot{RefinementAnd{}}
+	nref.Len()
+	nref.Index(1)
 
 	var ivref invalidRefinement
 	ivref.Index(2)
 	ivref.isRefinement()
 	ivref.IsZero()
+	ivref.Verify()
 	ivref.Len()
 	ivref.Choice()
 	_ = ivref.String()

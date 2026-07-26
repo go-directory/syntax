@@ -1,0 +1,194 @@
+package syntax
+
+/*
+approx.go implements basic Approximate (sounds-like) matching
+system.
+
+Inspired by github.com/umahmood/soundex, but without regex
+and including a levenshtein compute function for edit distance.
+*/
+
+import (
+	"strings"
+)
+
+// soundexMappings soundex consonant mappings
+var soundexMappings = map[string][]string{
+	"1": []string{"b", "f", "p", "v"},
+	"2": []string{"c", "g", "j", "k", "q", "s", "x", "z"},
+	"3": []string{"d", "t"},
+	"4": []string{"l"},
+	"5": []string{"m", "n"},
+	"6": []string{"r"},
+}
+
+// transpose creates a lookup table of soundex mappings
+func transpose(sm map[string][]string) (soundexTable map[string]string) {
+	soundexTable = make(map[string]string)
+	for val, list := range soundexMappings {
+		for _, char := range list {
+			soundexTable[char] = val
+		}
+	}
+	return
+}
+
+func removeDigits(s string) string {
+    b := make([]byte, 0, len(s))
+    for i := 0; i < len(s); i++ {
+        if s[i] < '0' || s[i] > '9' {
+            b = append(b, s[i])
+        }
+    }
+    return string(b)
+}
+
+func removeHWExceptFirst(s string) string {
+    if len(s) == 0 {
+        return s
+    }
+    first := s[0]
+    b := []byte{first}
+    for i := 1; i < len(s); i++ {
+        if s[i] != 'h' && s[i] != 'w' {
+            b = append(b, s[i])
+        }
+    }
+    return string(b)
+}
+
+func removeVowelsExceptFirst(s string) string {
+    if len(s) == 0 {
+        return s
+    }
+    first := s[0]
+    b := []byte{first}
+    for i := 1; i < len(s); i++ {
+        switch s[i] {
+        case 'a', 'e', 'i', 'o', 'u', 'y':
+            // skip
+        default:
+            b = append(b, s[i])
+        }
+    }
+    return string(b)
+}
+
+func soundexCode(word string) string {
+    word = removeDigits(word)
+    word = strings.Replace(word, " ", "", -1)
+    if word == "" {
+        return "000"
+    }
+
+    soundexTable := transpose(soundexMappings)
+    word = strings.ToLower(word)
+
+    firstLetter := word[0]
+    code := removeHWExceptFirst(word)
+
+    // replace consonants with digits
+    val := make([]byte, 0, len(code))
+    for i := 0; i < len(code); i++ {
+        if d, ok := soundexTable[string(code[i])]; ok {
+            val = append(val, d[0])
+        } else {
+            val = append(val, code[i])
+        }
+    }
+    code = string(val)
+
+    // collapse adjacent duplicate digits
+    collapsed := make([]byte, 0, len(code))
+    for i := 0; i < len(code); i++ {
+        if i == 0 || code[i] != code[i-1] {
+            collapsed = append(collapsed, code[i])
+        }
+    }
+    code = string(collapsed)
+
+    code = removeVowelsExceptFirst(code)
+
+    // restore first letter if digit
+    if code[0] >= '1' && code[0] <= '6' {
+        code = string(firstLetter) + code[1:]
+    }
+
+    for len(code) < 4 {
+        code += "0"
+    }
+    return strings.ToUpper(code[:4])
+}
+
+// levenshtein computes edit distance between two strings.
+func levenshtein(a, b string) int {
+    la := len(a)
+    lb := len(b)
+
+    if la == 0 {
+        return lb
+    }
+    if lb == 0 {
+        return la
+    }
+
+    prev := make([]int, lb+1)
+    curr := make([]int, lb+1)
+
+    for j := 0; j <= lb; j++ {
+        prev[j] = j
+    }
+
+    for i := 0; i < la; i++ {
+        curr[0] = i + 1
+        ai := a[i]
+        for j := 0; j < lb; j++ {
+            cost := 0
+            if ai != b[j] {
+                cost = 1
+            }
+
+            del := prev[j+1] + 1
+            ins := curr[j] + 1
+            sub := prev[j] + cost
+
+            m := del
+            if ins < m {
+                m = ins
+            }
+            if sub < m {
+                m = sub
+            }
+            curr[j+1] = m
+        }
+        prev, curr = curr, prev
+    }
+
+    return prev[lb]
+}
+
+// ApproxMatch is an approximate match function.
+//
+// realVal      = stored attribute value
+// assertionVal = value from the filter (e.g. (cn~=Jess))
+func ApproxMatch(realVal, assertionVal string) bool {
+    // Normalize via Soundex
+    rCode := soundexCode(realVal)
+    aCode := soundexCode(assertionVal)
+
+    // primary rule: soundex logic
+    if rCode == aCode {
+        return true
+    }
+
+    // secondary rule: small edit distance
+    d := levenshtein(realVal, assertionVal)
+
+    // threshold: 1 for short strings, 2 for longer ones
+    if d <= 1 {
+        return true
+    }
+
+    return len(realVal) > 6 && d <= 2
+}
+

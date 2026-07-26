@@ -4,6 +4,13 @@ package subspec
 subtree.go implements the RFC3672 SubtreeSpecification.
 */
 
+import (
+	"strconv"
+	"strings"
+
+	"github.com/go-directory/syntax"
+)
+
 /*
 SubtreeSpecification implements the Subtree Specification construct.
 
@@ -90,12 +97,13 @@ SubtreeSpecification returns an instance of [SubtreeSpecification]
 alongside an error.
 
 If the input is nil, the default [SubtreeSpecification] (e.g.: "{}")
-is returned.
+is returned with a nil error.
 
 If the input is a string, an attempt to marshal the value is made. If
 the string is zero, this is equivalent to providing nil.
 
-Any errors found will result in the return of an invalid [Filter] instance.
+Any errors found will result in the return of an invalid
+[SubtreeSpecification] instance.
 */
 func New(x any) (ss SubtreeSpecification, err error) {
 
@@ -114,7 +122,7 @@ func New(x any) (ss SubtreeSpecification, err error) {
 	if err = checkSubtreeEncaps(raw); err != nil {
 		return
 	}
-	raw = trimS(raw[1 : len(raw)-1])
+	raw = strings.TrimSpace(raw[1 : len(raw)-1])
 
 	var ranges map[string][]int = make(map[string][]int, 0)
 
@@ -134,7 +142,7 @@ func New(x any) (ss SubtreeSpecification, err error) {
 }
 
 func (r *SubtreeSpecification) marshalBase(raw string, ranges map[string][]int) (err error) {
-	if begin := stridx(raw, `base `); begin != -1 {
+	if begin := strings.Index(raw, `base `); begin != -1 {
 		var end int
 		begin += 5
 		if r.Base, end, err = subtreeBase(raw[begin:]); err == nil {
@@ -147,7 +155,7 @@ func (r *SubtreeSpecification) marshalBase(raw string, ranges map[string][]int) 
 }
 
 func (r *SubtreeSpecification) marshalExclusions(raw string, ranges map[string][]int) (err error) {
-	if begin := stridx(raw, `specificExclusions `); begin != -1 {
+	if begin := strings.Index(raw, `specificExclusions `); begin != -1 {
 		var end int
 		begin += 19
 		if r.ChopSpecification.Exclusions, end, err = subtreeExclusions(raw, begin); err == nil {
@@ -160,7 +168,7 @@ func (r *SubtreeSpecification) marshalExclusions(raw string, ranges map[string][
 }
 
 func (r *SubtreeSpecification) marshalMinimum(raw string, ranges map[string][]int) (err error) {
-	if begin := stridx(raw, `minimum `); begin != -1 {
+	if begin := strings.Index(raw, `minimum `); begin != -1 {
 		var end int
 		begin += 8
 		if r.ChopSpecification.Minimum, end, err = subtreeMinMax(raw, begin); err == nil {
@@ -173,7 +181,7 @@ func (r *SubtreeSpecification) marshalMinimum(raw string, ranges map[string][]in
 }
 
 func (r *SubtreeSpecification) marshalMaximum(raw string, ranges map[string][]int) (err error) {
-	if begin := stridx(raw, `maximum `); begin != -1 {
+	if begin := strings.Index(raw, `maximum `); begin != -1 {
 		var end int
 		begin += 8
 		if r.ChopSpecification.Maximum, end, err = subtreeMinMax(raw, begin); err == nil {
@@ -186,7 +194,7 @@ func (r *SubtreeSpecification) marshalMaximum(raw string, ranges map[string][]in
 }
 
 func (r *SubtreeSpecification) marshalSpecFilter(raw string, ranges map[string][]int) (err error) {
-	if begin := stridx(raw, `specificationFilter `); begin != -1 {
+	if begin := strings.Index(raw, `specificationFilter `); begin != -1 {
 		begin += 20
 		var err error
 		if r.SpecificationFilter, err = subtreeRefinement(raw, begin); err == nil {
@@ -319,7 +327,7 @@ func (r SpecificExclusions) String() string {
 		_s = append(_s, r[i].String())
 	}
 
-	return `{ ` + join(_s, `, `) + ` }`
+	return `{ ` + strings.Join(_s, `, `) + ` }`
 }
 
 func (r SpecificExclusion) IsZero() bool {
@@ -395,20 +403,20 @@ func subtreeExclusions(raw string, begin int) (excl SpecificExclusions, end int,
 	parts := splitRefinementParts(content)
 
 	for _, p := range parts {
-		p = trimS(p)
+		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
 
 		// split into key and value. value may contain spaces/commas so split only once.
-		kv := splitN(p, " ", 2)
+		kv := strings.SplitN(p, " ", 2)
 		if len(kv) != 2 {
 			err = mkerr("Malformed specificExclusions part: ", p)
 			return
 		}
-		key := trimS(kv[0])
-		val := trimS(kv[1])
-		val = trim(val, `"`) // remove surrounding quotes if present
+		key := strings.TrimSpace(kv[0])
+		val := strings.TrimSpace(kv[1])
+		val = strings.Trim(val, `"`) // remove surrounding quotes if present
 
 		if key != "chopBefore" && key != "chopAfter" {
 			err = mkerr("Unexpected key '", key, "'")
@@ -445,7 +453,7 @@ func subtreeMinMax(raw string, begin int) (minmax BaseDistance, end int, err err
 		break
 	}
 
-	if m, err = atoi(max); err == nil {
+	if m, err = strconv.Atoi(max); err == nil {
 		minmax = BaseDistance(m)
 		end = len(max)
 	}
@@ -481,12 +489,12 @@ func (r SubtreeSpecification) String() (s string) {
 	}
 
 	if r.ChopSpecification.Minimum > 0 {
-		_s = append(_s, `minimum `+itoa(int(r.ChopSpecification.Minimum)))
+		_s = append(_s, `minimum `+strconv.Itoa(int(r.ChopSpecification.Minimum)))
 
 	}
 
 	if r.ChopSpecification.Maximum > 0 {
-		_s = append(_s, `maximum `+itoa(int(r.ChopSpecification.Maximum)))
+		_s = append(_s, `maximum `+strconv.Itoa(int(r.ChopSpecification.Maximum)))
 
 	}
 
@@ -495,7 +503,7 @@ func (r SubtreeSpecification) String() (s string) {
 		_s = append(_s, `specificationFilter `+x)
 	}
 
-	s = `{` + join(_s, `, `) + `}`
+	s = `{` + strings.Join(_s, `, `) + `}`
 
 	return
 }
@@ -634,7 +642,7 @@ func (r RefinementAnd) String() (s string) {
 		for _, ref := range r {
 			parts = append(parts, ref.String())
 		}
-		s = "and:{" + join(parts, ",") + "}"
+		s = "and:{" + strings.Join(parts, ",") + "}"
 	}
 
 	return
@@ -719,7 +727,7 @@ func (r RefinementOr) String() (s string) {
 		for _, ref := range r {
 			parts = append(parts, ref.String())
 		}
-		s = "or:{" + join(parts, ",") + "}"
+		s = "or:{" + strings.Join(parts, ",") + "}"
 	}
 
 	return
@@ -934,23 +942,25 @@ func subtreeBase(x any) (base LocalName, end int, err error) {
 }
 
 func subtreeRefinement(x any, begin ...int) (ref Refinement, err error) {
+	ref = invalidRefinement{}
+
 	var input string
 	if input, err = assertString(x, 1, "Specification Filter"); err != nil {
 		return
 	}
 	if len(begin) > 0 {
-		input = trimS(input[begin[0]:])
+		input = strings.TrimSpace(input[begin[0]:])
 	} else {
-		input = trimS(input)
+		input = strings.TrimSpace(input)
 	}
 
-	if hasPfx(input, "item:") {
+	if strings.HasPrefix(input, "item:") {
 		ref, err = parseItem(input)
-	} else if hasPfx(input, "and:") {
+	} else if strings.HasPrefix(input, "and:") {
 		ref, err = parseAnd(input)
-	} else if hasPfx(input, "or:") {
+	} else if strings.HasPrefix(input, "or:") {
 		ref, err = parseOr(input)
-	} else if hasPfx(input, "not:") {
+	} else if strings.HasPrefix(input, "not:") {
 		ref, err = parseNot(input)
 	} else {
 		err = mkerr("invalid refinement: ", input)
@@ -959,18 +969,23 @@ func subtreeRefinement(x any, begin ...int) (ref Refinement, err error) {
 	return
 }
 
-func parseItem(input string) (Refinement, error) {
-	var ref Refinement = invalidRefinement{}
-	parts := splitN(input, ":", 2)
+func parseItem(input string) (ref Refinement, err error) {
+	ref = invalidRefinement{}
+	parts := strings.SplitN(input, ":", 2)
 	if len(parts) != 2 {
-		return ref, mkerr("invalid item: ", input)
+		err = mkerr("invalid item: ", input)
+		return
 	}
 
-	res, err := Resolve(parts[1])
-	if err == nil {
-		ref = RefinementItem(res)
+	var ok bool
+	if ok, err = IsObjectClass(parts[1]); ok {
+		var res string
+		if res, err = Resolve(parts[1]); err == nil {
+			ref = RefinementItem(res)
+		}
 	}
-	return ref, err
+
+	return
 }
 
 func parseAnd(input string) (Refinement, error) {
@@ -981,42 +996,45 @@ func parseOr(input string) (Refinement, error) {
 	return parseComplexRefinement(input, "or:")
 }
 
-func parseNot(input string) (Refinement, error) {
-	input = trimPfx(input, "not:")
-	subRef, err := subtreeRefinement(input)
-	if err != nil {
-		return nil, err
+func parseNot(input string) (not Refinement, err error) {
+	input = strings.TrimPrefix(input, "not:")
+	var subRef Refinement
+	if subRef, err = subtreeRefinement(input); err == nil {
+		not = RefinementNot{subRef}
 	}
-	return RefinementNot{subRef}, nil
+
+	return
 }
 
-func parseComplexRefinement(input, prefix string) (Refinement, error) {
-	input = trimPfx(input, prefix)
-	input = trimS(input)
-	input = trimPfx(input, "{")
-	input = trimSfx(input, "}")
+func parseComplexRefinement(input, prefix string) (ref Refinement, err error) {
+	input = strings.TrimPrefix(input, prefix)
+	input = strings.TrimSpace(input)
+	input = strings.TrimPrefix(input, "{")
+	input = strings.TrimSuffix(input, "}")
 
 	var refs []Refinement
 	parts := splitRefinementParts(input)
-	for _, part := range parts {
-		subRef, err := subtreeRefinement(part)
-		if err != nil {
-			return nil, err
+	for i := 0; i < len(parts) && err == nil; i++ {
+		var subRef Refinement
+		if subRef, err = subtreeRefinement(parts[i]); err == nil {
+			refs = append(refs, subRef)
 		}
-		refs = append(refs, subRef)
 	}
 
 	if prefix == "and:" {
-		return RefinementAnd(refs), nil
+		ref = RefinementAnd(refs)
+	} else {
+		ref = RefinementOr(refs)
 	}
-	return RefinementOr(refs), nil
+
+	return
 }
 
 // splitRefinementParts splits input on top-level commas while respecting nested braces
 // and quoted strings. It returns trimmed parts (but does not remove surrounding quotes).
 func splitRefinementParts(input string) []string {
 	var parts []string
-	var sb = newStrBuilder()
+	sb := &strings.Builder{}
 	depth := 0
 	inQuote := false
 	escape := false
@@ -1052,7 +1070,7 @@ func splitRefinementParts(input string) []string {
 		}
 
 		if r == ',' && depth == 0 && !inQuote {
-			part := trimS(sb.String())
+			part := strings.TrimSpace(sb.String())
 			if part != "" {
 				parts = append(parts, part)
 			}
@@ -1063,7 +1081,7 @@ func splitRefinementParts(input string) []string {
 		sb.WriteRune(r)
 	}
 
-	if s := trimS(sb.String()); s != "" {
+	if s := strings.TrimSpace(sb.String()); s != "" {
 		parts = append(parts, s)
 	}
 
@@ -1211,6 +1229,27 @@ func resolveD2O(d string) (o string, ok bool) {
 }
 
 var (
-	OIDFwdMap = make(map[string]string)   // 1-to-1  (descr -> oid)
-	OIDRevMap = make(map[string][]string) // 1-to-1+ (oid -> descr(s))
+	OIDFwdMap map[string]string   // 1-to-1  (descr -> oid)
+	OIDRevMap map[string][]string // 1-to-1+ (oid -> descr(s))
 )
+
+/*
+IsObjectClass is called during underlying [RefinementItem] parsing to
+ensure the string value is an LDAP Object Class in numeric or descriptor
+form.
+
+This function is purely syntactical and does not trigger any OID resolution.
+
+To disable syntax checking, set this variable to something like:
+
+	func(_ any) (bool, error) { return true, nil }
+*/
+var IsObjectClass func(any) (bool, error)
+
+func init() {
+	var found bool
+	IsObjectClass, found = syntax.SyntaxVerifiers[`1.3.6.1.4.1.1466.115.121.1.38`]
+	if !found {
+		panic("no ObjectClass OID syntax checker found")
+	}
+}

@@ -1,0 +1,4 @@
+github.com/JesseCoretta/go-shifty v1.0.1 h1:+AaQbNfVtWxWwI9jo0Hke6Jv1mBlOD/bAooaj0xjVi8=
+github.com/JesseCoretta/go-shifty v1.0.1/go.mod h1:vnqi9wCMnLDDD4XU3NmL2fF7dz4HiaAuI/M3bqB2bQE=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=

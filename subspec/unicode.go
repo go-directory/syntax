@@ -10,18 +10,6 @@ import (
 )
 
 var (
-	runeLen func(rune) int                          = utf8.RuneLen
-	ucIs    func(*unicode.RangeTable, rune) bool    = unicode.Is
-	ucIn    func(rune, ...*unicode.RangeTable) bool = unicode.In
-)
-
-var runeSelf rune = utf8.RuneSelf
-var maxASCII rune = unicode.MaxASCII
-
-var (
-	digits,
-	lAlphas,
-	uAlphas,
 	utf1Range,
 	utf2aSafeRange,
 	utf2bSafeRange,
@@ -37,24 +25,12 @@ func isAlpha(r rune) bool {
 	return isLAlpha(r) || isUAlpha(r)
 }
 
-func isAlnum(r rune) bool {
-	return isAlpha(r) || isDigit(r)
-}
-
 func isUAlpha(r rune) bool {
 	return 'A' <= r && r <= 'Z'
 }
 
 func isLAlpha(r rune) bool {
 	return 'a' <= r && r <= 'z'
-}
-
-func isWHSP(ch rune) bool {
-	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
-}
-
-func isAlphaNumeric(r rune) bool {
-	return ucIn(r, digits, uAlphas, lAlphas)
 }
 
 /*
@@ -84,7 +60,7 @@ func isSafeUTF8(x any) (err error) {
 	var last rune
 	for i := 0; i < len(raw) && err == nil; i++ {
 		r := raw[i]
-		switch rL := runeLen(r); rL {
+		switch rL := utf8.RuneLen(r); rL {
 		case 1:
 			// ASCII range w/o double-quote
 			err = isSafeUTF1(string(r))
@@ -103,7 +79,7 @@ func isSafeUTF8(x any) (err error) {
 
 func isSafeUTF1(x string) (err error) {
 	z := rune([]byte(x)[0])
-	if !(ucIs(utf1Range, z) && z != '"') {
+	if !(unicode.Is(utf1Range, z) && z != '"') {
 		err = mkerr("Incompatible char for UTF0 (in ASCII Safe Range):" + x)
 	}
 
@@ -114,8 +90,8 @@ func isSafeUTF2(x string) (err error) {
 	z := []byte(string(x))
 	ch1 := rune(z[0])
 	ch2 := rune(z[1])
-	if !(ucIs(utf2aSafeRange, ch1) &&
-		ucIs(utf2bSafeRange, ch2)) {
+	if !(unicode.Is(utf2aSafeRange, ch1) &&
+		unicode.Is(utf2bSafeRange, ch2)) {
 		err = mkerr("Incompatible chars for UTF2 (in UTF2 Safe Range): " + x)
 	}
 
@@ -127,9 +103,9 @@ func isSafeUTF3(x string) (err error) {
 	ch1 := rune(z[0])
 	ch2 := rune(z[1])
 	ch3 := rune(z[2])
-	if !(ucIs(utf3SafeRange, ch1) &&
-		ucIs(utf2bSafeRange, ch2) &&
-		ucIs(utf2bSafeRange, ch3)) {
+	if !(unicode.Is(utf3SafeRange, ch1) &&
+		unicode.Is(utf2bSafeRange, ch2) &&
+		unicode.Is(utf2bSafeRange, ch3)) {
 		err = mkerr("Incompatible chars for UTF3 (in UTF3 Safe Range): " + x)
 	}
 
@@ -142,10 +118,10 @@ func isSafeUTF4(x string) (err error) {
 	ch2 := rune(z[1])
 	ch3 := rune(z[2])
 	ch4 := rune(z[3])
-	if !(ucIs(utf4SafeRange, ch1) &&
-		ucIs(utf2bSafeRange, ch2) &&
-		ucIs(utf2bSafeRange, ch3) &&
-		ucIs(utf2bSafeRange, ch4)) {
+	if !(unicode.Is(utf4SafeRange, ch1) &&
+		unicode.Is(utf2bSafeRange, ch2) &&
+		unicode.Is(utf2bSafeRange, ch3) &&
+		unicode.Is(utf2bSafeRange, ch4)) {
 		err = mkerr("Incompatible chars for UTF4 (in UTF4 Safe Range): " + x)
 	}
 
@@ -180,18 +156,6 @@ func assertRunes(x any, zok ...bool) (runes []rune, err error) {
 }
 
 func init() {
-
-	digits = &unicode.RangeTable{R16: []unicode.Range16{
-		{0x0030, 0x0039, 1},
-	}}
-
-	lAlphas = &unicode.RangeTable{R16: []unicode.Range16{
-		{0x0041, 0x005A, 1},
-	}}
-
-	uAlphas = &unicode.RangeTable{R16: []unicode.Range16{
-		{0x0061, 0x007A, 1},
-	}}
 
 	utf1Range = &unicode.RangeTable{R16: []unicode.Range16{
 		{0x0000, 0x007F, 1},
