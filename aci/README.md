@@ -2,7 +2,15 @@
 
 Package aci implements the entirety of the Netscape ACIv3 syntax, used in multiple directory products such as Oracle Directory, 389DS, OpenDJ, et al., for the purpose of defining access privileges.
 
-Please note that each implementation of Netscape's ACIv3 syntax has subtle variations.  While this library aims to be a _complete_ implementation of the syntax, your directory system may or may not support all desired features. Review your vendor documentation to determine which features are available to you.
+Please note that each implementation of Netscape's ACIv3 syntax has subtle variations.  While this library aims to be a _complete_ implementation of the syntax, your own directory system _may or may not support all desired features_. Review your vendor documentation to determine which features are available to you, and adjust your usage of this package accordingly.
+
+## Status
+
+This package is EXPERIMENTAL and should not yet be used in any real production environment for any mission critical endeavor with respect to securing a directory via privilege definitions.
+
+However, if this package is used merely to analyze existing ACIv3 definitions for the purposes of cybersecurity audit and oversight, or other similar use case, this is acceptable simply because there will be real flesh-and-blood humans reviewing the results. If you use AI for this, you need to seek professional psychiatric help.
+
+It is true that this package has been around for awhile, and currently houses many unit tests that pass with flying colors.  The package may very well be "ready" for prime time, however this would only be advertised officially once more people contribute to this package through nonpartisan testing and analysis. In short, we need more people to try this package by simply feeding it their own ACIv3 definitions and analyzing the results.
 
 ## Features
 
