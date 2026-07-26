@@ -6,5 +6,5 @@ Package filter implements [RFC4515](https://www.rfc-editor.org/info/rfc4515/) se
 
  - Interface-based `Filter` type, qualified through instances of `FilterAnd`, `FilterExtensibleMatch`, et al
  - Panic-proof indexing
- - Supports creation of search filters by text parsing or manual type instance assembly
+ - Supports creation of search filters by text parsing or manual type instance assembly 
 
