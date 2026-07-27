@@ -65,6 +65,7 @@ var MatchingRuleAssertions map[string]MatchingRuleAssertion
 func init() {
 	MatchingRuleAssertions = map[string]MatchingRuleAssertion{
 		"2.5.13.0":                   EqualityRuleAssertion(objectIdentifierMatch),
+		"2.5.13.1":                   EqualityRuleAssertion(distinguishedNameMatch),
 		"2.5.13.2":                   EqualityRuleAssertion(caseIgnoreMatch),
 		"2.5.13.3":                   OrderingRuleAssertion(caseIgnoreOrderingMatch),
 		"2.5.13.4":                   SubstringsRuleAssertion(caseIgnoreSubstringsMatch),
@@ -84,6 +85,7 @@ func init() {
 		"2.5.13.18":                  OrderingRuleAssertion(octetStringOrderingMatch),
 		"2.5.13.20":                  EqualityRuleAssertion(telephoneNumberMatch),
 		"2.5.13.21":                  SubstringsRuleAssertion(telephoneNumberSubstringsMatch),
+		"2.5.13.23":                  EqualityRuleAssertion(uniqueMemberMatch),
 		"2.5.13.27":                  EqualityRuleAssertion(generalizedTimeMatch),
 		"2.5.13.28":                  OrderingRuleAssertion(generalizedTimeOrderingMatch),
 		"2.5.13.29":                  EqualityRuleAssertion(integerFirstComponentMatch),
@@ -97,8 +99,4 @@ func init() {
 		"1.3.6.1.1.16.2":             EqualityRuleAssertion(uuidMatch),
 		"1.3.6.1.1.16.3":             OrderingRuleAssertion(uuidOrderingMatch),
 	}
-
-	// TODO: figure out DN plan (roll my own or go-ldap/DN?)
-	//"2.5.13.1":                   EqualityRuleAssertion(distinguishedNameMatch),
-	//"2.5.13.23":                  EqualityRuleAssertion(uniqueMemberMatch),
 }

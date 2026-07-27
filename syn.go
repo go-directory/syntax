@@ -19,6 +19,7 @@ func init() {
 		`1.3.6.1.4.1.1466.115.121.1.6`:  bitString,
 		`1.3.6.1.4.1.1466.115.121.1.7`:  boolean,
 		`1.3.6.1.4.1.1466.115.121.1.11`: countryString,
+		`1.3.6.1.4.1.1466.115.121.1.12`: dN,
 		`1.3.6.1.4.1.1466.115.121.1.14`: deliveryMethod,
 		`1.3.6.1.4.1.1466.115.121.1.15`: directoryString,
 		`1.3.6.1.4.1.1466.115.121.1.21`: enhancedGuide,
@@ -28,6 +29,7 @@ func init() {
 		`1.3.6.1.4.1.1466.115.121.1.26`: iA5String,
 		`1.3.6.1.4.1.1466.115.121.1.27`: integer,
 		`1.3.6.1.4.1.1466.115.121.1.28`: jPEG,
+		`1.3.6.1.4.1.1466.115.121.1.34`: nameAndOptionalUID,
 		`1.3.6.1.4.1.1466.115.121.1.36`: numericString,
 		`1.3.6.1.4.1.1466.115.121.1.40`: octetString,
 		`1.3.6.1.4.1.1466.115.121.1.38`: oID,
@@ -45,8 +47,4 @@ func init() {
 	// TODO: I honestly don't have a clue what
 	// my plan should be for fax data.
 	//`1.3.6.1.4.1.1466.115.121.1.23`: fax,
-
-	// TODO: figure out DN plan (roll my own or go-ldap/DN?)
-	//`1.3.6.1.4.1.1466.115.121.1.12`: dN,
-	//`1.3.6.1.4.1.1466.115.121.1.34`: nameAndOptionalUID,
 }
