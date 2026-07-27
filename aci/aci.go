@@ -14,8 +14,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/go-directory/syntax/filter"
 	"github.com/JesseCoretta/go-shifty"
+	"github.com/go-directory/syntax/filter"
 )
 
 /*
