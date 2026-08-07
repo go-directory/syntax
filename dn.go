@@ -22,10 +22,10 @@ func NewDistinguishedName(x []byte, preproc bool) (DistinguishedName, error) {
 		dn = DistinguishedName{DN: _dn}
 		if preproc {
 			str := _dn.String()
-			dn.Normal     = []byte(strings.ToLower(str))
-			dn.Case       = []byte(str)
+			dn.Normal = []byte(strings.ToLower(str))
+			dn.Case = []byte(str)
 			dn.Attributes = make([][]byte, 0)
-			dn.Values     = make([][]byte, 0)
+			dn.Values = make([][]byte, 0)
 
 			atSeen := make(map[string]struct{})
 			for i := 0; i < len(_dn.RDNs); i++ {
