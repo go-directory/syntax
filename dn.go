@@ -7,12 +7,49 @@ import (
 	"github.com/go-ldap/ldap/v3"
 )
 
-func NewDistinguishedName(x string) (*ldap.DN, error) {
-	return ldap.ParseDN(x)
+type DistinguishedName struct {
+	DN         *ldap.DN
+	Normal     []byte
+	Case       []byte
+	Attributes [][]byte
+	Values     [][]byte
+}
+
+func NewDistinguishedName(x []byte, preproc bool) (DistinguishedName, error) {
+	var dn DistinguishedName
+	_dn, err := ldap.ParseDN(string(x))
+	if err == nil {
+		dn = DistinguishedName{DN: _dn}
+		if preproc {
+			str := _dn.String()
+			dn.Normal     = []byte(strings.ToLower(str))
+			dn.Case       = []byte(str)
+			dn.Attributes = make([][]byte, 0)
+			dn.Values     = make([][]byte, 0)
+
+			atSeen := make(map[string]struct{})
+			for i := 0; i < len(_dn.RDNs); i++ {
+				for j := 0; j < len(_dn.RDNs[i].Attributes); j++ {
+					at := _dn.RDNs[i].Attributes[j]
+					if _, found := atSeen[at.Type]; !found {
+						atSeen[at.Type] = struct{}{}
+						dn.Attributes = append(dn.Attributes, []byte(at.Type))
+					}
+					dn.Values = append(dn.Values, []byte(at.Value))
+				}
+			}
+		}
+	}
+
+	return dn, err
 }
 
 func dN(x any) (ok bool, err error) {
 	switch tv := x.(type) {
+	case DistinguishedName:
+		if tv.DN == nil {
+			err = errors.New("Invalid *ldap.DN instance")
+		}
 	case string:
 		_, err = ldap.ParseDN(tv)
 	default:
@@ -45,7 +82,7 @@ From [§ 1.4 of RFC 4512]:
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 */
 type NameAndOptionalUID struct {
-	DN  *ldap.DN
+	DN  DistinguishedName
 	UID BitString `asn1:"optional"`
 }
 
@@ -61,7 +98,7 @@ func marshalNameAndOptionalUID(x any) (nou NameAndOptionalUID, err error) {
 	case NameAndOptionalUID:
 		nou = tv
 		return
-	case *ldap.DN:
+	case DistinguishedName:
 		nou.DN = tv
 		return
 	default:
@@ -101,8 +138,8 @@ func marshalNameAndOptionalUID(x any) (nou NameAndOptionalUID, err error) {
 		}
 	}
 
-	var dn *ldap.DN
-	if dn, err = ldap.ParseDN(raw[:_l]); err == nil {
+	var dn DistinguishedName
+	if dn.DN, err = ldap.ParseDN(raw[:_l]); err == nil {
 		nou.DN = dn
 	}
 
@@ -110,19 +147,23 @@ func marshalNameAndOptionalUID(x any) (nou NameAndOptionalUID, err error) {
 }
 
 func distinguishedNameMatch(a, b any) (result bool, err error) {
-	mkDN := func(x any) (dn *ldap.DN, err error) {
+	mkDN := func(x any) (dn DistinguishedName, err error) {
 		switch tv := a.(type) {
-		case string:
-			dn, err = ldap.ParseDN(tv)
-		case *ldap.DN:
+		case DistinguishedName:
+			if tv.DN == nil {
+				err = errors.New("Nil *ldap.DN")
+				break
+			}
 			dn = tv
+		case string:
+			dn.DN, err = ldap.ParseDN(tv)
 		default:
 			err = errorBadType("ldap.DN")
 		}
 		return
 	}
 
-	var dn1, dn2 *ldap.DN
+	var dn1, dn2 DistinguishedName
 	if dn1, err = mkDN(a); err != nil {
 		return
 	}
@@ -131,17 +172,7 @@ func distinguishedNameMatch(a, b any) (result bool, err error) {
 		return
 	}
 
-	if len(dn1.RDNs) != len(dn2.RDNs) {
-		return
-	}
-
-	for i := range dn1.RDNs {
-		if !dn1.RDNs[i].Equal(dn2.RDNs[i]) {
-			return
-		}
-	}
-
-	result = true
+	result = dn1.DN.EqualFold(dn2.DN)
 	return
 }
 
