@@ -4,11 +4,11 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/go-ldap/ldap/v3"
+	"github.com/go-directory/dua"
 )
 
 type DistinguishedName struct {
-	DN         *ldap.DN
+	DN         *dua.DN
 	Normal     []byte
 	Case       []byte
 	Attributes [][]byte
@@ -17,7 +17,7 @@ type DistinguishedName struct {
 
 func NewDistinguishedName(x []byte, preproc bool) (DistinguishedName, error) {
 	var dn DistinguishedName
-	_dn, err := ldap.ParseDN(string(x))
+	_dn, err := dua.ParseDN(string(x))
 	if err == nil {
 		dn = DistinguishedName{DN: _dn}
 		if preproc {
@@ -48,12 +48,12 @@ func dN(x any) (ok bool, err error) {
 	switch tv := x.(type) {
 	case DistinguishedName:
 		if tv.DN == nil {
-			err = errors.New("Invalid *ldap.DN instance")
+			err = errors.New("Invalid *dua.DN instance")
 		}
 	case string:
-		_, err = ldap.ParseDN(tv)
+		_, err = dua.ParseDN(tv)
 	default:
-		err = errorBadType("ldap.DN")
+		err = errorBadType("dua.DN")
 
 	}
 	return err == nil, err
@@ -139,7 +139,7 @@ func marshalNameAndOptionalUID(x any) (nou NameAndOptionalUID, err error) {
 	}
 
 	var dn DistinguishedName
-	if dn.DN, err = ldap.ParseDN(raw[:_l]); err == nil {
+	if dn.DN, err = dua.ParseDN(raw[:_l]); err == nil {
 		nou.DN = dn
 	}
 
@@ -151,14 +151,14 @@ func distinguishedNameMatch(a, b any) (result bool, err error) {
 		switch tv := a.(type) {
 		case DistinguishedName:
 			if tv.DN == nil {
-				err = errors.New("Nil *ldap.DN")
+				err = errors.New("Nil *dua.DN")
 				break
 			}
 			dn = tv
 		case string:
-			dn.DN, err = ldap.ParseDN(tv)
+			dn.DN, err = dua.ParseDN(tv)
 		default:
-			err = errorBadType("ldap.DN")
+			err = errorBadType("dua.DN")
 		}
 		return
 	}
