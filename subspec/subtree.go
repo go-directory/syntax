@@ -11,6 +11,8 @@ import (
 	"github.com/go-directory/syntax"
 )
 
+var OIDSubtreeSpecification = `1.3.6.1.4.1.1466.115.121.1.45`
+
 /*
 SubtreeSpecification implements the Subtree Specification construct.
 

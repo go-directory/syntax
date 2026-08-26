@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/JesseCoretta/go-shifty"
+	"github.com/go-directory/common"
 	"github.com/go-directory/syntax/filter"
 )
 
@@ -2753,44 +2753,44 @@ func parseACIv3BindRuleTokens(tokens []aCIBindRuleToken) (rule BindRule, err err
 }
 
 func newDoW() DayOfWeek {
-	return DayOfWeek(shifty.New(shifty.Uint8))
+	return DayOfWeek(common.NewBitValue(common.Uint8))
 }
 
 func newLvls() *aCILevels {
-	l := aCILevels(shifty.New(shifty.Uint16))
+	l := aCILevels(common.NewBitValue(common.Uint16))
 	return &l
 }
 
 func newRights() *aCIRights {
-	r := aCIRights(shifty.New(shifty.Uint16))
+	r := aCIRights(common.NewBitValue(common.Uint16))
 	return &r
 }
 
-func (r DayOfWeek) cast() shifty.BitValue {
-	return shifty.BitValue(r)
+func (r DayOfWeek) cast() common.BitValue {
+	return common.BitValue(r)
 }
 
-func (r aCILevels) cast() shifty.BitValue {
-	return shifty.BitValue(r)
+func (r aCILevels) cast() common.BitValue {
+	return common.BitValue(r)
 }
 
-func (r aCIRights) cast() shifty.BitValue {
-	return shifty.BitValue(r)
+func (r aCIRights) cast() common.BitValue {
+	return common.BitValue(r)
 }
 
 type (
-	// [DayOfWeek] is a type alias of [shifty.BitValue], and is used
+	// [DayOfWeek] is a type alias of [common.BitValue], and is used
 	// to construct a dayofweek [BindRule].
-	DayOfWeek shifty.BitValue // 8-bit
+	DayOfWeek common.BitValue // 8-bit
 
-	// rights is a private type alias of shifty.BitValue, and is
+	// rights is a private type alias of common.BitValue, and is
 	// used in the construction of an instance of [Permission].
-	aCIRights shifty.BitValue // 16-bit
+	aCIRights common.BitValue // 16-bit
 
-	// levels is a private type alias of shifty.BitValue, and is
+	// levels is a private type alias of common.BitValue, and is
 	// used in the construction of an inheritance-based userattr
 	// or groupattr BindRule by embedding.
-	aCILevels shifty.BitValue // 16-bit
+	aCILevels common.BitValue // 16-bit
 
 )
 
@@ -3062,7 +3062,7 @@ func (r InheritanceLevel) String() (lvl string) {
 }
 
 /*
-Shift wraps the [shifty.BitValue.Shift] method.
+Shift wraps the [common.BitValue.Shift] method.
 */
 func (r Inheritance) Shift(x ...any) Inheritance {
 	if r.aCILevels == nil {
@@ -3111,7 +3111,7 @@ func assertIntInheritance(x int) (lvl InheritanceLevel) {
 }
 
 /*
-Positive wraps the [shifty.BitValue.Positive] method.
+Positive wraps the [common.BitValue.Positive] method.
 */
 func (r Inheritance) Positive(x any) (posi bool) {
 	if !r.IsZero() {
@@ -3132,7 +3132,7 @@ func (r Inheritance) Positive(x any) (posi bool) {
 }
 
 /*
-Unshift wraps the [shifty.BitValue.Unshift] method.
+Unshift wraps the [common.BitValue.Unshift] method.
 */
 func (r Inheritance) Unshift(x ...any) Inheritance {
 	if !r.IsZero() {
@@ -5642,7 +5642,7 @@ func NewWeekendBindRule(cop any) (b BindRule) {
 }
 
 /*
-Shift wraps [shifty.BitValue.Shift] method to allow for bit-shifting of the receiver (r) instance using various representations of any number of days (string, int or [Day]).
+Shift wraps [common.BitValue.Shift] method to allow for bit-shifting of the receiver (r) instance using various representations of any number of days (string, int or [Day]).
 */
 func (r DayOfWeek) Shift(x ...any) DayOfWeek {
 	// initialize receiver r if zero.
@@ -5668,7 +5668,7 @@ func (r DayOfWeek) Shift(x ...any) DayOfWeek {
 }
 
 /*
-Positive wraps the [shifty.BitValue.Positive] method.
+Positive wraps the [common.BitValue.Positive] method.
 */
 func (r DayOfWeek) Positive(x Day) (posi bool) {
 	if !r.IsZero() {
@@ -5678,7 +5678,7 @@ func (r DayOfWeek) Positive(x Day) (posi bool) {
 }
 
 /*
-Unshift wraps [shifty.BitValue.Unshift] method to allow for bit-unshifting of the receiver (r) instance using various representations of any number of days (string, int or [Day]).
+Unshift wraps [common.BitValue.Unshift] method to allow for bit-unshifting of the receiver (r) instance using various representations of any number of days (string, int or [Day]).
 */
 func (r DayOfWeek) Unshift(x ...any) DayOfWeek {
 	// can't unshift from nothing

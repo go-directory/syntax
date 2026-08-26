@@ -44,6 +44,33 @@ func init() {
 		`1.3.6.1.1.16.1`:                uUID,
 	}
 
+	// TODO:
+	// 1.3.6.1.4.1.1466.115.121.1.1 (aci item)
+	// 1.3.6.1.4.1.1466.115.121.1.2 (access point)
+	// 1.3.6.1.4.1.1466.115.121.1.13 (data quality)
+	// 1.3.6.1.4.1.1466.115.121.1.18 (dl submit permission)
+	// 1.3.6.1.4.1.1466.115.121.1.19 (dsa quality)
+	// 1.3.6.1.4.1.1466.115.121.1.20 (dse type)
+	// 1.3.6.1.4.1.1466.115.121.1.32 (main preference)
+	// 1.3.6.1.4.1.1466.115.121.1.33 (mhs or address)
+	// 1.3.6.1.4.1.1466.115.121.1.42 (protocol information)
+	// 1.3.6.1.4.1.1466.115.121.1.43 (presentation address)
+	// 1.3.6.1.4.1.1466.115.121.1.46 (supplier information)
+	// 1.3.6.1.4.1.1466.115.121.1.47 (supplier or consumer)
+	// 1.3.6.1.4.1.1466.115.121.1.48 (supplier and consumer)
+	// 1.3.6.1.4.1.1466.115.121.1.55 (modify rights)
+	// 1.3.6.1.4.1.1466.115.121.1.8 (certificate)
+	// 1.3.6.1.4.1.1466.115.121.1.9 (certificate list)
+	// 1.3.6.1.4.1.1466.115.121.1.10 (certificate pair)
+	// 1.3.6.1.4.1.1466.115.121.1.49 (supported algorithm)
+	// 1.3.6.1.1.15.1 (X.509 Certificate Exact Assertion)
+	// 1.3.6.1.1.15.2 (X.509 Certificate Assertion)
+	// 1.3.6.1.1.15.3 (X.509 Certificate Pair Exact Assertion))
+	// 1.3.6.1.1.15.4 (X.509 Certificate Pair Assertion)
+	// 1.3.6.1.1.15.5 (X.509 Certificate List Exact Assertion)
+	// 1.3.6.1.1.15.6 (X.509 Certificate List Assertion)
+	// 1.3.6.1.1.15.7 (X.509 Algorithm Identifier)
+
 	// TODO: I honestly don't have a clue what
 	// my plan should be for fax data.
 	//`1.3.6.1.4.1.1466.115.121.1.23`: fax,
