@@ -5,6 +5,41 @@ import (
 	"testing"
 )
 
+func ExampleObjectIdentifier_Encode() {
+	var orig string = `1.3.6.1.4.1`
+	o, err := NewObjectIdentifier(orig)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = o.Encode(); err == nil {
+		fmt.Printf("%#v\n", enc)
+	}
+	// Output: []byte{0x2b, 0x6, 0x1, 0x4, 0x1}
+}
+
+func ExampleObjectIdentifier_Decode() {
+	// pre-encoded OID bytes for 1.3.6.1.4.1
+	enc := []byte{0x2b, 0x6, 0x1, 0x4, 0x1}
+
+	var dest ObjectIdentifier
+	if err := dest.Decode(enc); err == nil {
+		fmt.Println(dest.String())
+	}
+	// Output: 1.3.6.1.4.1
+}
+
+func ExampleObjectIdentifier_Decode_bogus() {
+	// pre-encoded OID bytes for (illegal) 3.3.6.1.4.1
+	enc := []byte{0x7B, 0x6, 0x1, 0x4, 0x1}
+
+	var dest ObjectIdentifier
+	fmt.Println(dest.Decode(enc))
+	// Output: OBJECT IDENTIFIER: illegal first and/or second level arcs
+}
+
 func TestObjectIdentifier_oID(t *testing.T) {
 	for _, val := range []string{
 		`cn`,

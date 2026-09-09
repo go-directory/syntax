@@ -355,6 +355,123 @@ func (r ObjectIdentifier) matchOID(oiv ObjectIdentifier, off int) (matched bool)
 	return ct == L
 }
 
+/*
+Encode returns byte slices alongside an error following an attempt to
+encode the receiver instance.
+*/
+func (r ObjectIdentifier) Encode() ([]byte, error) {
+	if !r.Valid() {
+		return nil, errorOIDNil
+	}
+
+	first := r[0]
+	second := r[1]
+
+	// First-two-arc compression: (first * 40) + second
+	var combined numberForm
+
+	if !second.big {
+		// first is ALWAYS native, second is native here
+		combined = numberForm{
+			ok:     true,
+			native: first.native*40 + second.native,
+		}
+	} else {
+		// second is big, so we must use big.Int math
+		tmp := newBigInt(0).Mul(newBigInt(0).SetUint64(first.native), newBigInt(40))
+		tmp.Add(tmp, second.bigInt)
+		combined = numberForm{
+			ok:     true,
+			big:    true,
+			bigInt: tmp,
+		}
+	}
+
+	// Encode first two arcs
+	wire := vlqEncode(combined)
+
+	// Encode remaining arcs
+	for i := 2; i < r.Len(); i++ {
+		wire = append(wire, vlqEncode(r[i])...)
+	}
+
+	return wire, nil
+}
+
+/*
+Decode returns an error following an attempt to decode the input buf bytes
+into the receiver instance. Any data present in the receiver instance will
+be destroyed.
+*/
+func (r *ObjectIdentifier) Decode(buf []byte) error {
+	if len(buf) < 1 {
+		return errorOIDBadEnc
+	}
+
+	p := 0
+
+	// Decode combined first+second arc as numberForm
+	combined, err := vlqDecode(buf, &p)
+	if err != nil {
+		return err
+	}
+
+	// Reject combined values 120..159 (these correspond to illegal root 3.x)
+	if !combined.big {
+		v := combined.native
+		if v >= 120 && v < 160 {
+			return errorOIDBadFirstArcs
+		}
+	}
+
+	var firstNF, secondNF numberForm
+
+	if !combined.big {
+		// Native path
+		v := combined.native
+
+		switch {
+		case v < 40:
+			// 0.x
+			firstNF = numberForm{ok: true, native: 0}
+			secondNF = numberForm{ok: true, native: v}
+		case v < 80:
+			// 1.(v-40)
+			firstNF = numberForm{ok: true, native: 1}
+			secondNF = numberForm{ok: true, native: v - 40}
+		default:
+			// 2.(v-80)
+			firstNF = numberForm{ok: true, native: 2}
+			secondNF = numberForm{ok: true, native: v - 80}
+		}
+	} else {
+		// Big path: combined is big.Int
+		// For big combined, it must be >= 80: first = 2, second = combined - 80
+		tmp := newBigInt(0).Set(combined.bigInt)
+		tmp.Sub(tmp, newBigInt(80))
+
+		firstNF = numberForm{ok: true, native: 2}
+		secondNF = numberForm{ok: true, big: true, bigInt: tmp}
+	}
+
+	arcs := make(ObjectIdentifier, 0, 4)
+	arcs = append(arcs, firstNF, secondNF)
+
+	// Remaining arcs
+	for p < len(buf) && err == nil {
+		var nf numberForm
+		if nf, err = vlqDecode(buf, &p); err == nil {
+			arcs = append(arcs, nf)
+		}
+	}
+
+	if err == nil {
+		*r = arcs
+	}
+
+	return err
+}
+
 var newBigInt func(int64) *big.Int = big.NewInt
 
 /*
@@ -727,6 +844,201 @@ func resolveDescrToOID(a any) (o ObjectIdentifier, err error) {
 	}
 
 	return
+}
+
+/*
+Encode returns a byte slice alongside an error following an attempt to
+encode the receiver instance as Big Endian bytes.
+*/
+func (r numberForm) Encode() ([]byte, error) {
+	if !r.ok {
+		return nil, errorNFNil
+	}
+	enc := vlqEncode(r)
+	return enc, nil
+}
+
+/*
+Decode returns an error following an attempt to decode the input buf bytes
+into the receiver instance. Any data present in the receiver instance will
+be destroyed.
+*/
+func (r *numberForm) Decode(buf []byte) error {
+	p := 0
+	n, err := vlqDecode(buf, &p)
+	if err == nil {
+		*r = n
+	}
+	return err
+}
+
+func bEToUint64(b []byte) uint64 {
+	n := len(b)
+	if n > 8 {
+		panic("bigEndianToUint64: buffer length must be ≤ 8")
+	}
+
+	var u uint64
+	for i := 0; i < 8-n; i++ {
+		u = (u << 8) | 0x00
+	}
+	for _, by := range b {
+		u = (u << 8) | uint64(by)
+	}
+	return u
+}
+
+func uint64ToBE(n uint64) []byte {
+	b := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		b[i] = byte(n & 0xff)
+		n >>= 8
+	}
+	return b
+}
+
+func bEFitsUint64(b []byte) bool {
+	n := len(b)
+	if n > 8 {
+		for i := 0; i < n-8; i++ {
+			if b[i] != 0x00 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func bEToNumberForm(b []byte) (i numberForm) {
+	if i.big = !bEFitsUint64(b); i.big {
+		i.bigInt = newBigInt(0).SetBytes(b)
+	} else {
+		i.native = bEToUint64(b)
+	}
+
+	return
+}
+
+func vlqEncode(nf numberForm) []byte {
+	if !nf.ok {
+		return nil
+	}
+
+	if nf.big {
+		return vlqEncodeBig(nf.bigInt)
+	}
+	return vlqEncodeUint64(nf.native)
+}
+
+func vlqEncodeUint64(n uint64) []byte {
+	if n == 0 {
+		return []byte{0}
+	}
+
+	var buf [16]byte
+	i := len(buf)
+
+	for n > 0 {
+		i--
+		b := byte(n & 0x7F) // take 7 bits
+		n >>= 7
+
+		if len(buf)-i > 1 { // set continuation bit except on last octet
+			b |= 0x80
+		}
+		buf[i] = b
+	}
+
+	return buf[i:]
+}
+
+func vlqEncodeBig(n *big.Int) []byte {
+	if n.Sign() == 0 {
+		return []byte{0}
+	}
+
+	tmp := newBigInt(0).Set(n)
+	rem := newBigInt(0)
+
+	out := make([]byte, 0, 16)
+
+	for tmp.Sign() != 0 {
+		tmp.DivMod(tmp, newBigInt(128), rem)
+		b := byte(rem.Uint64())
+		out = append(out, b)
+	}
+
+	// reverse and set continuation bits
+	for i := 0; i < len(out)/2; i++ {
+		out[i], out[len(out)-1-i] = out[len(out)-1-i], out[i]
+	}
+
+	for i := 0; i < len(out)-1; i++ {
+		out[i] |= 0x80
+	}
+
+	return out
+}
+
+// Top-level dispatcher: choose native or big based on magnitude.
+func vlqDecode(buf []byte, p *int) (numberForm, error) {
+	u, done, err := vlqDecodeUint64(buf, p)
+	if err != nil {
+		return numberForm{}, err
+	}
+	if done {
+		return numberForm{ok: true, native: u}, nil
+	}
+	return vlqDecodeBig(buf, p, u)
+}
+
+func vlqDecodeUint64(buf []byte, p *int) (uint64, bool, error) {
+	var u uint64
+
+	for {
+		if *p >= len(buf) {
+			return 0, false, errorNFBadVLQ
+		}
+
+		b := buf[*p]
+		seven := uint64(b & 0x7F)
+
+		// Would shifting overflow?
+		if u > (^(uint64(0)) >> 7) {
+			// Do NOT consume this byte; let big path handle it.
+			return u, false, nil
+		}
+
+		// Safe to consume
+		*p++
+		u = (u << 7) | seven
+
+		if b&0x80 == 0 {
+			return u, true, nil
+		}
+	}
+}
+
+func vlqDecodeBig(buf []byte, p *int, prefix uint64) (numberForm, error) {
+	n := newBigInt(0).SetUint64(prefix)
+
+	for {
+		if *p >= len(buf) {
+			return numberForm{}, errorNFBadVLQ
+		}
+
+		b := buf[*p]
+		*p++
+
+		seven := int64(b & 0x7F)
+
+		n.Lsh(n, 7)
+		n.Or(n, newBigInt(seven))
+
+		if b&0x80 == 0 {
+			return numberForm{ok: true, big: true, bigInt: n}, nil
+		}
+	}
 }
 
 /*
