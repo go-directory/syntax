@@ -13,14 +13,14 @@ NumericString implements [§ 3.3.23 of RFC 4517]:
 
 [§ 3.3.23 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.23
 */
-type NumericString string
+type NumericString []byte
+
+const TagNumericString byte = 0x12 // 18
 
 /*
 String returns the string representation of the receiver instance.
 */
-func (r NumericString) String() string {
-	return string(r)
-}
+func (r NumericString) String() string { return string(r) }
 
 /*
 IsZero returns a Boolean value indicative of a nil receiver state.
@@ -41,8 +41,35 @@ func NewNumericString(x any) (NumericString, error) {
 	return marshalNumericString(x)
 }
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 NumericString value.
+*/
+func (r NumericString) Encode() ([]byte, error) {
+	return encodePrimitive(TagNumericString, r)
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the NumericString tag (0x12).
+*/
+func (r *NumericString) Decode(enc []byte) error {
+	if len(enc) < 3 || enc[0] != TagNumericString {
+		return errNumericDecode
+	}
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errNumericDecode
+	}
+	*r = NumericString(enc[1+n : 1+n+l])
+	return nil
+}
+
+var errNumericDecode = errors.New("asn1: invalid NumericString")
+
 func marshalNumericString(x any) (ns NumericString, err error) {
-	var raw string
+	var raw []byte
 	if raw, err = assertNumericString(x); err == nil {
 		for _, char := range raw {
 			if !(isDigit(rune(char)) || char == ' ') {
@@ -59,7 +86,13 @@ func marshalNumericString(x any) (ns NumericString, err error) {
 	return
 }
 
-func assertNumericString(x any) (raw string, err error) {
+func assertNumericString(x any) (raw []byte, err error) {
+	badLen := func(l int) (err error) {
+		if l == 0 {
+			err = errorBadLength("Numeric String", 0)
+		}
+		return
+	}
 	switch tv := x.(type) {
 	case int, int8, int16, int32, int64:
 		if isNegativeInteger(tv) {
@@ -68,19 +101,19 @@ func assertNumericString(x any) (raw string, err error) {
 		}
 		var cint int64
 		if cint, err = castInt64(tv); err == nil {
-			raw = strconv.FormatInt(cint, 10)
+			raw = []byte(strconv.FormatInt(cint, 10))
 		}
 	case uint, uint8, uint16, uint32, uint64:
 		var cuint uint64
 		if cuint, err = castUint64(tv); err == nil {
-			raw = strconv.FormatUint(cuint, 10)
+			raw = []byte(strconv.FormatUint(cuint, 10))
 		}
-	case string:
-		if len(tv) == 0 {
-			err = errorBadLength("Numeric String", 0)
-			break
-		}
+	case []byte:
+		err = badLen(len(tv))
 		raw = tv
+	case string:
+		err = badLen(len(tv))
+		raw = []byte(tv)
 	default:
 		err = errorBadType("Numeric String")
 	}

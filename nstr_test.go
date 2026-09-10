@@ -1,8 +1,32 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
+
+func ExampleNumericString_roundTripBER() {
+	i, err := NewNumericString(1478231)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = i.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec NumericString
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: 1478231
+}
 
 func TestNumericString(t *testing.T) {
 	for _, raw := range []any{
