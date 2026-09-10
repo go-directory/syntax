@@ -1,7 +1,7 @@
 package syntax
 
 /*
-nf.go contains methods and types for expressing X.680 number forms.
+integer.go contains methods and types related to the ASN.1 INTEGER type.
 */
 
 import (
@@ -11,16 +11,16 @@ import (
 	"strconv"
 )
 
+const TagInteger byte = 0x02 // 2
+
 /*
-Integer implements the unbounded ASN.1 INTEGER type for use in the
-context of X.680 number forms, which are present within [NameAndInteger],
-[DotNotation] and [ASN1Notation] type instances.
+Integer implements the unbounded ASN.1 INTEGER type (tag 2).
 
 Note that *[big.Int] is used internally ONLY if the number overflows uint64.
 
 For safety reasons (with respect to ambiguity of default values), a zero
-instance of this type is bogus.  Users MUST use the [NewInteger] or
-[MustNewInteger] constructor to obtain valid instances of this type.
+instance of this type is bogus. Users MUST use the [NewInteger] constructor
+to obtain valid instances of this type.
 */
 type Integer struct {
 	big, ok bool
@@ -95,6 +95,99 @@ func (r Integer) String() string {
 	}
 
 	return s
+}
+
+func encodeIntegerValue(n int64) []byte {
+	if n == 0 {
+		return []byte{0x00}
+	}
+
+	var tmp [8]byte
+	v := uint64(n)
+	i := len(tmp)
+
+	for v != 0 && i > 0 {
+		i--
+		tmp[i] = byte(v)
+		v >>= 8
+	}
+
+	out := tmp[i:]
+
+	// Positive: ensure MSB = 0
+	if n > 0 && out[0]&0x80 != 0 {
+		out = append([]byte{0x00}, out...)
+	}
+
+	// Negative: ensure MSB = 1
+	if n < 0 && out[0]&0x80 == 0 {
+		out = append([]byte{0xFF}, out...)
+	}
+
+	return out
+}
+
+func decodeIntegerValue(b []byte) int64 {
+	var n int64
+	for i := 0; i < len(b); i++ {
+		n = (n << 8) | int64(b[i])
+	}
+	// Sign extend
+	shift := 64 - uint(len(b))*8
+	n = (n << shift) >> shift
+	return n
+}
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 INTEGER value.
+*/
+func (r Integer) Encode() ([]byte, error) {
+	if !r.ok {
+		return nil, errIntCodec
+	}
+
+	if r.big {
+		v := r.bigInt.Bytes()
+		if len(v) == 0 {
+			v = []byte{0x00}
+		} else if v[0]&0x80 != 0 {
+			v = append([]byte{0x00}, v...)
+		}
+		return encodePrimitive(TagInteger, v)
+	}
+
+	return encodePrimitive(TagInteger,
+		encodeIntegerValue(r.native))
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the INTEGER tag (0x02).
+*/
+func (r *Integer) Decode(enc []byte) error {
+	if len(enc) < 2 || enc[0] != TagInteger {
+		return errIntCodec
+	}
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errIntCodec
+	}
+	v := enc[1+n : 1+n+l]
+
+	if len(v) <= 8 {
+		r.native = decodeIntegerValue(v)
+		r.big = false
+		r.ok = true
+		return nil
+	}
+
+	bi := new(big.Int).SetBytes(v)
+	r.bigInt = bi
+	r.big = true
+	r.ok = true
+	return nil
 }
 
 /*
@@ -401,4 +494,5 @@ var (
 	errorIntNoInput = errors.New("INTEGER: nil or zero input")
 	errorIntOctal   = errors.New("INTEGER: leading zeroes (octal numbers) prohibited")
 	errorIntNaN     = errors.New("INTEGER: non numeric character found")
+	errIntCodec     = errors.New("INTEGER: invalid ASN.1 encoding")
 )

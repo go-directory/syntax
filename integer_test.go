@@ -1,8 +1,32 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
+
+func ExampleInteger_roundTripBER() {
+	i, err := NewInteger(1478231)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = i.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec Integer
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec.Native())
+	// Output: 1478231
+}
 
 func TestInteger_valid(t *testing.T) {
 	for idx, in := range []any{
