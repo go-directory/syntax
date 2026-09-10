@@ -11,6 +11,23 @@ func ExampleOctetString_IsZero() {
 	// Output: true
 }
 
+func ExampleOctetString_roundTripBER() {
+	oct := OctetString("JERRY. HELLO.")
+	enc, err := oct.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var dec OctetString
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: JERRY. HELLO.
+}
+
 func TestOctetString(t *testing.T) {
 	for _, raw := range []string{
 		``,

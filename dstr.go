@@ -35,6 +35,12 @@ From [ITU-T Rec. X.520 clause 2.6]:
 		universalString UniversalString(SIZE (1..maxSize,...)),
 		uTF8String UTF8String(SIZE (1..maxSize,...)) }
 
+While classic X.520 logic -- that is, the support for [TeletexString],
+[PrintableString], [BMPString] and [UniversalString] -- is implemented
+in this package for compatibility, generally it is recommended that end
+users stick with the [UTF8String] path for [DirectoryString] instances,
+as this is preferred in LDAP.
+
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 [§ 3.3.6 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.6
 [ITU-T Rec. X.520 clause 2.6]: https://www.itu.int/rec/T-REC-X.520
@@ -42,7 +48,6 @@ From [ITU-T Rec. X.520 clause 2.6]:
 type DirectoryString interface {
 	String() string
 	Choice() string
-	IsZero() bool
 	isDirectoryString() // differentiate from other interfaces
 }
 
@@ -63,7 +68,7 @@ DirectoryString returns an instance of [DirectoryString] alongside an error.
 
 The following input types are accepted:
 
-  - string (parsed as [UTF8String])
+  - []byte or string (parsed as [UTF8String])
   - [UTF8String]
   - [PrintableString]
   - [TeletexString]

@@ -10,10 +10,15 @@ import (
 	"unicode"
 )
 
+const TagOctetString byte = 0x04
+
 /*
 OctetString implements [§ 3.3.25 of RFC 4517]:
 
 	OctetString = *OCTET
+
+Note that values of this type MAY be zero length, however a
+type (tag) and length are required.
 
 [§ 3.3.25 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.25
 */
@@ -27,9 +32,7 @@ func (r OctetString) IsZero() bool { return r == nil }
 /*
 String returns the string representation of the receiver instance.
 */
-func (r OctetString) String() string {
-	return string(r)
-}
+func (r OctetString) String() string { return string(r) }
 
 /*
 Len returns the integer length of the receiver instance.
@@ -167,3 +170,30 @@ func octetStringOrderingMatch(a any, operator byte, b any) (result bool, err err
 
 	return
 }
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 OCTET STRING value.
+*/
+func (r OctetString) Encode() ([]byte, error) {
+	return encodePrimitive(TagOctetString, r)
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the OCTET STRING tag (0x04).
+*/
+func (r *OctetString) Decode(enc []byte) error {
+	if len(enc) < 2 || enc[0] != TagOctetString {
+		return errOctetDecode
+	}
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errOctetDecode
+	}
+	*r = enc[1+n : 1+n+l]
+	return nil
+}
+
+var errOctetDecode = errors.New("asn1: invalid OCTET STRING")

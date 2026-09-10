@@ -1,15 +1,31 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
+
+func ExampleBoolean_roundTripBER() {
+	var b Boolean = true
+	enc, err := b.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var dec Boolean
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(dec)
+	// Output: true
+}
 
 func TestNewBoolean(t *testing.T) {
 	for _, b := range []any{
 		true, false,
 		`true`, `TRUE`, `false`, `FALSE`, `True`, `False`,
-		0, 1,
-		byte(0x00), byte(0x01),
+		byte(0x00), byte(0xFF),
 	} {
 		if _, err := NewBoolean(b); err != nil {
 			t.Errorf("%s failed: %v", t.Name(), err)

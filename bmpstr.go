@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"errors"
+	"unicode/utf8"
 )
 
 /*
@@ -18,7 +19,9 @@ of payload P.
 
 [ITU-T Rec. X.680]: https://www.itu.int/rec/T-REC-X.680
 */
-type BMPString []uint8
+type BMPString []byte
+
+const TagBMPString byte = 0x1E // 30
 
 /*
 String returns the string representation of the receiver instance.
@@ -26,7 +29,7 @@ String returns the string representation of the receiver instance.
 This involves unmarshaling the receiver into a string return value.
 */
 func (r BMPString) String() string {
-	if len(r) < 3 || r[0] != 0x1E {
+	if len(r) < 3 || r[0] != TagBMPString {
 		return ""
 	}
 
@@ -46,6 +49,61 @@ func (r BMPString) String() string {
 }
 
 /*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 BMPString value.
+*/
+func (r BMPString) Encode() ([]byte, error) {
+	if len(r)%2 != 0 {
+		return nil, errBMPCodec
+	}
+
+	chars := len(r) / 2
+	var out []byte
+
+	switch {
+	case chars < 128:
+		out = make([]byte, 2+len(r))
+		out[0] = TagBMPString
+		out[1] = byte(chars)
+		copy(out[2:], r)
+	default:
+		n := lengthBytes(chars)
+		out = make([]byte, 1+1+n+len(r))
+		out[0] = TagBMPString
+		out[1] = 0x80 | byte(n)
+		writeLength(out[2:2+n], chars)
+		copy(out[2+n:], r)
+	}
+
+	return out, nil
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the BMPString tag (0x31).
+*/
+func (r *BMPString) Decode(enc []byte) error {
+	if len(enc) < 2 || enc[0] != TagBMPString {
+		return errBMPCodec
+	}
+	chars, n := readLength(enc[1:])
+	if n == 0 {
+		return errBMPCodec
+	}
+	bytes := chars * 2
+	if len(enc) < 1+n+bytes {
+		return errBMPCodec
+	}
+	*r = BMPString(enc[1+n : 1+n+bytes])
+	return nil
+}
+
+var (
+	errBMPCodec = errors.New("asn1: invalid BMPString")
+)
+
+/*
 IsZero returns a Boolean value indicative of a nil receiver state.
 */
 func (r BMPString) IsZero() bool { return r == nil }
@@ -59,22 +117,22 @@ func NewBMPString(x any) (BMPString, error) {
 }
 
 func assertBMPString(x any) (enc BMPString, err error) {
-	var e string
+	var e []byte
 	switch tv := x.(type) {
-	case []uint8:
-		e = string(tv)
+	case []byte:
+		e = tv
+	case string:
+		e = []byte(tv)
 	case BMPString:
-		if len(tv) == 0 {
-			break
-		} else if len(tv) == 2 {
-			if tv[0] != 0x1E || tv[1] != 0x0 {
+		if L := len(tv); L == 2 {
+			if tv[0] != TagBMPString || tv[1] != 0x0 {
 				err = errors.New("Invalid ASN.1 tag or length octet for empty string")
-			} else {
-				enc = BMPString{0x1E, 0x0}
+				return
 			}
+			enc = BMPString{TagBMPString, 0x0}
 			return
-		} else {
-			if tv[0] != 0x1E {
+		} else if L > 0 {
+			if tv[0] != TagBMPString {
 				err = errors.New("Invalid ASN.1 tag")
 				return
 			} else if int(tv[1]) != len(tv[2:]) {
@@ -82,8 +140,6 @@ func assertBMPString(x any) (enc BMPString, err error) {
 				return
 			}
 		}
-	case string:
-		e = tv
 	default:
 		err = errorBadType("BMPString")
 		return
@@ -91,26 +147,49 @@ func assertBMPString(x any) (enc BMPString, err error) {
 
 	if len(e) == 0 {
 		// Zero length values are OK
-		enc = BMPString{0x1E, 0x0}
+		enc = BMPString{TagBMPString, 0x0}
 		return
 	}
 
 	var result []byte
-	result = append(result, 0x1E) // Add BMPString tag (byte(30))
+	result = append(result, TagBMPString) // Add BMPString tag (byte(30))
 
-	encoded := utf16Enc([]rune(e))
-	length := len(encoded)
-	if uint16(length) > uint16(255) {
+	// UTF-8 to UTF-16BE
+	var utf16be []byte
+	if utf16be, err = buildUTF16BE(e); err != nil {
+		return
+	}
+
+	chars := len(utf16be) / 2
+	if chars > 255 {
 		err = errors.New("input string too long for BMPString encoding")
 		return
 	}
-	result = append(result, byte(length))
 
-	for _, char := range encoded {
-		result = append(result, byte(char>>8), byte(char&0xFF))
-	}
+	result = append(result, byte(chars))
+	result = append(result, utf16be...)
 
 	enc = BMPString(result)
+
+	return
+}
+
+func buildUTF16BE(e []byte) (utf16be []byte, err error) {
+	utf16be = make([]byte, 0, len(e)*2)
+
+	for i := 0; i < len(e); {
+		roon, sz := utf8.DecodeRune(e[i:])
+		if roon == utf8.RuneError && sz == 1 {
+			err = errors.New("invalid UTF-8 in BMPString")
+			return
+		}
+		if roon > 0xFFFF {
+			err = errors.New("BMPString cannot encode code points above U+FFFF")
+			return
+		}
+		utf16be = append(utf16be, byte(roon>>8), byte(roon))
+		i += sz
+	}
 
 	return
 }

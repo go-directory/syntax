@@ -29,7 +29,9 @@ From [§ 1.4 of RFC 4512]:
 
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 */
-type UTF8String string
+type UTF8String []byte
+
+const TagUTF8String byte = 0x0c // 12
 
 /*
 NewUTF8String returns an instance of [UTF8String] alongside an error
@@ -40,15 +42,15 @@ func NewUTF8String(x any) (UTF8String, error) {
 }
 
 func assertUTF8String(x any) (u UTF8String, err error) {
-	var raw string
+	var raw []byte
 
 	switch tv := x.(type) {
 	case UTF8String:
-		raw = string(tv)
+		raw = []byte(tv)
 	case []byte:
-		raw = string(tv)
-	case string:
 		raw = tv
+	case string:
+		raw = []byte(tv)
 	default:
 		err = errorBadType("UTF8String")
 		return
@@ -57,6 +59,33 @@ func assertUTF8String(x any) (u UTF8String, err error) {
 	u, err = uTF8(raw)
 	return
 }
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 UTF8String value.
+*/
+func (r UTF8String) Encode() ([]byte, error) {
+	return encodePrimitive(TagUTF8String, r)
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the UTF8String tag (0x0c).
+*/
+func (r *UTF8String) Decode(enc []byte) error {
+	if len(enc) < 3 || enc[0] != TagUTF8String {
+		return errUTF8Decode
+	}
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errUTF8Decode
+	}
+	*r = enc[1+n : 1+n+l]
+	return nil
+}
+
+var errUTF8Decode = errors.New("asn1: invalid OCTET STRING")
 
 /*
 String returns the string representation of the receiver instance.
@@ -223,9 +252,11 @@ func uTF8(x any, zok ...bool) (u UTF8String, err error) {
 	}
 
 	if err == nil {
+		var b string
 		for i := 0; i < len(raw); i++ {
-			u += UTF8String(raw[i])
+			b += string(raw[i])
 		}
+		u = UTF8String(b)
 	}
 
 	return

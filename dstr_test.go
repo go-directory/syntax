@@ -59,7 +59,6 @@ func TestDirectoryString_codecov(t *testing.T) {
 		TeletexString("Teletex123!"),
 	} {
 		_ = ds.String()
-		ds.IsZero()
 		ds.Choice()
 		ds.isDirectoryString()
 	}

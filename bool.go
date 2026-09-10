@@ -5,6 +5,10 @@ import (
 	"strconv"
 )
 
+type Boolean bool
+
+const TagBoolean byte = 0x01
+
 /*
 NewBoolean returns a Boolean value alongside an error following
 an analysis of input argument x as a boolean.
@@ -13,27 +17,28 @@ If x is a bool, it is guaranteed to be valid and is returned as-is.
 
 If x is a string, an underlying call to [strconv.ParseBool] is made.
 
-If x is a byte, only values of zero (0x00) for false, or one (0x01)
-for true, are considered valid. Any other byte value is an error.
-
-If x is an int, only values of zero (0) for false, or one (1)
-for true, are considered valid. Any other int value is an error.
+If x is a byte, only values of 0x00 for false, or 0xFF for true, are
+considered valid. Any other byte value is an error.
 
 Any other input type is an error.
 */
-func NewBoolean(x any) (b bool, err error) {
+func NewBoolean(x any) (b Boolean, err error) {
 	switch tv := x.(type) {
-	case bool:
+	case Boolean:
 		b = tv
+	case bool:
+		b = Boolean(tv)
 	case string:
-		b, err = strconv.ParseBool(tv)
+		var _b bool
+		_b, err = strconv.ParseBool(tv)
+		b = Boolean(_b)
 	case byte:
-		if b = tv == 0x01; !b && tv != 0x00 {
-			err = errors.New("Invalid bool byte; want 0x00 or 0x01")
-		}
-	case int:
-		if b = tv == 1; !b && tv != 0 {
-			err = errors.New("Invalid bool integer; want 0 or 1")
+		if tv == 0x00 {
+			b = Boolean(false)
+		} else if tv == 0xFF {
+			b = Boolean(true)
+		} else {
+			err = errors.New("Invalid bool byte; want 0x00 (false) or 0xFF (true)")
 		}
 	default:
 		err = errorBadType("boolean")
@@ -48,7 +53,7 @@ func boolean(x any) (result bool, err error) {
 }
 
 func booleanMatch(realValue, assertionValue any) (result bool, err error) {
-	var a, b bool
+	var a, b Boolean
 	if a, err = NewBoolean(realValue); err == nil {
 		if b, err = NewBoolean(assertionValue); err == nil {
 			result = a == b
@@ -61,3 +66,48 @@ func booleanMatch(realValue, assertionValue any) (result bool, err error) {
 
 	return
 }
+
+func encodeBool(v bool) (enc []byte) {
+	enc = []byte{0x00}
+	if v {
+		enc = []byte{0xFF}
+	}
+	return
+}
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 BOOLEAN value.
+*/
+
+func (r Boolean) Encode() ([]byte, error) {
+	return encodePrimitive(TagBoolean, encodeBool(bool(r)))
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the BOOLEAN tag (0x01).
+*/
+func (r *Boolean) Decode(enc []byte) error {
+	if len(enc) != 3 || enc[0] != TagBoolean {
+		return errBoolDecode
+	}
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errBoolDecode
+	}
+
+	b := enc[2]
+	var err error
+	if b == 0x00 {
+		*r = Boolean(false)
+	} else if b == 0xFF {
+		*r = Boolean(true)
+	} else {
+		err = errBoolDecode
+	}
+	return err
+}
+
+var errBoolDecode = errors.New("asn1: invalid BOOLEAN")

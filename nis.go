@@ -64,9 +64,9 @@ func (r NetgroupTriple) String() string {
 		r.Username,
 		r.Domain,
 	} {
-		if ia5 == "" {
-			// Yes, a zero string is also acceptable,
-			// but a hyphen Just Looks Better™.
+		if len(ia5) == 0 {
+			// Use a hyphen for null, because it
+			// Just Looks Better™.
 			trips = append(trips, `-`)
 		} else {
 			trips = append(trips, ia5.String())

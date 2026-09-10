@@ -1,15 +1,21 @@
 package syntax
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
+	"strconv"
+	"unicode/utf8"
 )
+
+const TagUniversalString byte = 0x1C // 28
 
 /*
 UniversalString implements the Universal Character Set.
 
 	UCS = 0x0000 through 0xFFFF
 */
-type UniversalString string
+type UniversalString []byte
 
 /*
 UniversalString returns an instance of [UniversalString] alongside an error
@@ -26,21 +32,21 @@ func universalString(x any) (result bool) {
 }
 
 func marshalUniversalString(x any) (us UniversalString, err error) {
-	var raw string
+	var raw []byte
 
 	switch tv := x.(type) {
 	case UniversalString:
-		raw = string(tv)
+		raw = []byte(tv)
 	case []byte:
-		raw = string(tv)
-	case string:
 		raw = tv
+	case string:
+		raw = []byte(tv)
 	default:
 		err = errorBadType("UniversalString")
 		return
 	}
 
-	if !utf8OK(raw) {
+	if !utf8.Valid(raw) {
 		err = errors.New("invalid UniversalString: failed UTF8 checks")
 		return
 	}
@@ -49,6 +55,85 @@ func marshalUniversalString(x any) (us UniversalString, err error) {
 
 	return
 }
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an ASN.1 UniversalString
+value.
+*/
+func (r UniversalString) Encode() ([]byte, error) {
+	L := len(r)
+	out := make([]byte, 4*L)
+	pos := 0
+
+	for i := 0; i < L; {
+		roon, sz := utf8.DecodeRune(r[i:])
+		if roon == utf8.RuneError && sz == 1 {
+			return nil, errors.New("UniversalString: invalid UTF-8")
+		}
+		if err := universalStringCharacterOutOfBounds(roon); err != nil {
+			return nil, err
+		}
+		binary.BigEndian.PutUint32(out[pos:], uint32(roon))
+		pos += 4
+		i += sz
+	}
+
+	return encodePrimitive(TagUniversalString, out[:pos])
+}
+
+func universalStringCharacterOutOfBounds(r rune) (err error) {
+	if r > 0x10FFFF || (r >= 0xD800 && r <= 0xDFFF) {
+		err = errors.New("UNIVERSAL STRING: invalid code point " +
+			string(r) + " (" + strconv.Itoa(int(r)) + ")")
+	}
+
+	return
+}
+
+/*
+Decode returns an error following an attempt to decode and write
+the input enc value to the receiver instance.  The encoding must
+not be truncated, and must bear the UniversalString tag (0x1C).
+*/
+func (r *UniversalString) Decode(enc []byte) error {
+	if len(enc) < 3 || enc[0] != TagUniversalString {
+		return errUnivDecode
+	}
+
+	l, n := readLength(enc[1:])
+	if n == 0 || len(enc) < 1+n+l {
+		return errUnivDecode
+	}
+
+	v := enc[1+n : 1+n+l]
+	if len(v)%4 != 0 {
+		return errUnivDecode
+	}
+
+	sb := &bytes.Buffer{}
+	sb.Grow(len(v))
+
+	for i := 0; i < len(v); i += 4 {
+		cp := uint32(v[i])<<24 |
+			uint32(v[i+1])<<16 |
+			uint32(v[i+2])<<8 |
+			uint32(v[i+3])
+
+		if universalStringCharacterOutOfBounds(rune(cp)) != nil {
+			return errUnivDecode
+		}
+
+		var tmp [4]byte
+		n := utf8.EncodeRune(tmp[:], rune(cp))
+		sb.Write(tmp[:n])
+	}
+
+	*r = UniversalString(sb.Bytes())
+	return nil
+}
+
+var errUnivDecode = errors.New("asn1: invalid UniversalString")
 
 /*
 String returns the string representation of the receiver instance.

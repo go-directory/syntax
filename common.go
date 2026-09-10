@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+type textLike interface{ ~string | ~[]byte }
+
 /*
 assertFirstStructField is a private function used for
 firstComponent EQUALITY matching, in which the first
@@ -131,4 +133,67 @@ func strInSlice(r any, slice []string, cEM ...bool) (match bool) {
 	}
 
 	return
+}
+
+/*
+ber encoder for OctetString, PrintableString, et al.
+*/
+func encodePrimitive(tag byte, v []byte) ([]byte, error) {
+	l := len(v)
+	var out []byte
+
+	switch {
+	case l < 128:
+		out = make([]byte, 2+l)
+		out[0] = tag
+		out[1] = byte(l)
+		copy(out[2:], v)
+	default:
+		n := lengthBytes(l)
+		out = make([]byte, 1+1+n+l)
+		out[0] = tag
+		out[1] = 0x80 | byte(n)
+		writeLength(out[2:2+n], l)
+		copy(out[2+n:], v)
+	}
+
+	return out, nil
+}
+
+func lengthBytes(l int) int {
+	switch {
+	case l < 256:
+		return 1
+	case l < 65536:
+		return 2
+	case l < 16777216:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func writeLength(dst []byte, l int) {
+	for i := len(dst) - 1; i >= 0; i-- {
+		dst[i] = byte(l)
+		l >>= 8
+	}
+}
+
+func readLength(b []byte) (int, int) {
+	if len(b) == 0 {
+		return 0, 0
+	}
+	if b[0] < 128 {
+		return int(b[0]), 1
+	}
+	n := int(b[0] & 0x7F)
+	if len(b) < 1+n {
+		return 0, 0
+	}
+	l := 0
+	for i := 0; i < n; i++ {
+		l = (l << 8) | int(b[1+i])
+	}
+	return l, 1 + n
 }

@@ -52,3 +52,26 @@ func TestBMPString_codecov(t *testing.T) {
 	assertBMPString(BMPString{0x1e, 0x1, 0x1, 0xef})
 	assertBMPString(BMPString{0x1a, 0x1, 0x1, 0xef})
 }
+
+func ExampleBMPString_roundTripBER() {
+	bmp, err := NewBMPString("HELΣLO")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = bmp.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec BMPString
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: HELΣLO
+}

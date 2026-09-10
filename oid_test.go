@@ -5,29 +5,25 @@ import (
 	"testing"
 )
 
-func ExampleObjectIdentifier_Encode() {
-	var orig string = `1.3.6.1.4.1`
-	o, err := NewObjectIdentifier(orig)
+func ExampleObjectIdentifier_roundTripBER() {
+	o, err := NewObjectIdentifier(`1.3.6.1.4.1`)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	var enc []byte
-	if enc, err = o.Encode(); err == nil {
-		fmt.Printf("%#v\n", enc)
+	if enc, err = o.Encode(); err != nil {
+		fmt.Println(err)
+		return
 	}
-	// Output: []byte{0x2b, 0x6, 0x1, 0x4, 0x1}
-}
 
-func ExampleObjectIdentifier_Decode() {
-	// pre-encoded OID bytes for 1.3.6.1.4.1
-	enc := []byte{0x2b, 0x6, 0x1, 0x4, 0x1}
-
-	var dest ObjectIdentifier
-	if err := dest.Decode(enc); err == nil {
-		fmt.Println(dest.String())
+	var dec ObjectIdentifier
+	if err := dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
 	}
+	fmt.Println(dec.String())
 	// Output: 1.3.6.1.4.1
 }
 
