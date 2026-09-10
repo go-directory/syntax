@@ -19,14 +19,12 @@ From [§ 1.4 of RFC 4512]:
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 [§ 3.3.4 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.4
 */
-type CountryString string
+type CountryString []byte
 
 /*
 String returns the string representation of the receiver instance.
 */
-func (r CountryString) String() string {
-	return string(r)
-}
+func (r CountryString) String() string { return string(r) }
 
 /*
 IsZero returns a Boolean value indicative of a nil receiver state.
@@ -51,30 +49,36 @@ func NewCountryString(x any) (CountryString, error) {
 }
 
 func marshalCountryString(x any) (cs CountryString, err error) {
-	var raw string
+	var raw []byte
+
+	badLen := func(l int) (err error) {
+		if l != 2 {
+			err = errorBadLength("Country String", 0)
+		}
+
+		return
+	}
 
 	switch tv := x.(type) {
 	case string:
-		if len(tv) != 2 {
-			err = errorBadLength("Country String", 0)
-			return
-		}
-		raw = tv
+		err = badLen(len(tv))
+		raw = []byte(tv)
 	case []byte:
-		cs, err = marshalCountryString(string(tv))
-		return
+		err = badLen(len(tv))
+		raw = tv
 	default:
 		err = errorBadType("Country String")
 		return
 	}
 
-	if !isUAlpha(rune(raw[0])) || !isUAlpha(rune(raw[1])) {
-		err = errors.New("Incompatible characters for Country String: " +
-			string(raw[0]) + "/" + string(raw[0]))
-		return
+	if err == nil {
+		if !isUAlpha(rune(raw[0])) || !isUAlpha(rune(raw[1])) {
+			err = errors.New("Incompatible characters for Country String: " +
+				string(raw[0]) + "/" + string(raw[0]))
+			return
+		}
+		cs = CountryString(raw)
 	}
-
-	cs = CountryString(raw)
 
 	return
 }
