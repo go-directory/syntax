@@ -1307,8 +1307,8 @@ func TestNetscape_codecov(t *testing.T) {
 	bdn.Push("nothing")
 	bdn.Index(0)
 
-	var adn aCIDistinguishedName
-	adn.contains(struct{}{})
+	var aDN aCIDistinguishedName
+	aDN.contains(struct{}{})
 
 	_, _ = parseATBTV("#")
 	_ = isAttributeDescriptor(`abc-`)
