@@ -1,8 +1,26 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
+
+func ExampleIA5String_roundTripBER() {
+	ia5 := IA5String("Testing")
+	enc, err := ia5.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var dec IA5String
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: Testing
+}
 
 func TestIA5String(t *testing.T) {
 
@@ -51,7 +69,7 @@ func TestIA5String_CaseMatch(t *testing.T) {
 func TestIA5String_codecov(t *testing.T) {
 	_, _ = iA5String("HELLO.")
 	_, _ = iA5String("jesse.coretta@icloud.com")
-	if err := checkIA5String(`jesse.coretta@icloud.com`); err != nil {
+	if err := checkIA5String([]byte(`jesse.coretta@icloud.com`)); err != nil {
 		t.Errorf("%s failed: %v", t.Name(), err)
 		return
 	}
