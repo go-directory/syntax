@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+func BenchmarkOctetStringASN1(b *testing.B) {
+	ost := []byte(`This is an octet string.`)
+	o, _ := NewOctetString(ost)
+	b.StopTimer()
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		enc, _ := o.Encode()
+		var dec OctetString
+		_ = dec.Decode(enc)
+	}
+}
+
+func BenchmarkNewOctetString(b *testing.B) {
+	b.StopTimer()
+	ost := [][]byte{
+		[]byte(`This is an octet string.`),
+		[]byte(`This is an ooOOOOO000o0OOOOOOoooooooooooooooOO00o0000OOOOOctet string.`),
+		[]byte(`this too`),
+		[]byte(`WAT`),
+	}
+
+	maxIdx := len(ost)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = NewOctetString(ost[i%maxIdx])
+	}
+}
+
 func ExampleOctetString_IsZero() {
 	var oct OctetString
 	fmt.Println(oct.IsZero())
