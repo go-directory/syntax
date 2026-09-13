@@ -83,9 +83,9 @@ func TestGuide_codecov(t *testing.T) {
 		_ = eg.String()
 	}
 
-	subsetToInt(`baseobject`)
-	subsetToInt(`onelevel`)
-	subsetToInt(`wholesubtree`)
+	subsetToInt([]byte(`baseobject`))
+	subsetToInt([]byte(`onelevel`))
+	subsetToInt([]byte(`wholesubtree`))
 
 	marshalEnhancedGuide("account#...#((?$))#")
 	marshalGuide("@..@#Value")
