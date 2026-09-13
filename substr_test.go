@@ -24,28 +24,28 @@ func TestSubstringAssertion(t *testing.T) {
 }
 
 func TestSubstringAssertion_codecov(t *testing.T) {
-	substrProcess1(`11*11`)
-	substrProcess1(`aaaa`)
-	substrProcess1(`  `)
-	substrProcess2(`11*11`)
-	substrProcess2(`nil`)
-	substrProcess2(`  `)
-	substrProcess2(`aaaa`)
-	substrProcess3(`11*11`)
-	substrProcess3(`  `)
-	substrProcess3(`aaaa`)
-	substrProcess4(`11*11`)
-	substrProcess4(`aaaa`)
-	substrProcess4(`    `)
+	substrProcess1([]byte(`11*11`))
+	substrProcess1([]byte(`aaaa`))
+	substrProcess1([]byte(`  `))
+	substrProcess2([]byte(`11*11`))
+	substrProcess2([]byte(`nil`))
+	substrProcess2([]byte(`  `))
+	substrProcess2([]byte(`aaaa`))
+	substrProcess3([]byte(`11*11`))
+	substrProcess3([]byte(`  `))
+	substrProcess3([]byte(`aaaa`))
+	substrProcess4([]byte(`11*11`))
+	substrProcess4([]byte(`aaaa`))
+	substrProcess4([]byte(`    `))
 
 	prepareStringListAssertion([]string{`ahch`, `helkl4`}, `h*lk*4`)
 
 	assertSubstringAssertion(SubstringAssertion{})
 	substringAssertion(`aa*a`)
-	substrProcess1(`aa*a`)
-	substrProcess2(`aa*a`)
-	substrProcess3(`aa*a`)
-	substrProcess4(`aa*a`)
+	substrProcess1([]byte(`aa*a`))
+	substrProcess2([]byte(`aa*a`))
+	substrProcess3([]byte(`aa*a`))
+	substrProcess4([]byte(`aa*a`))
 
 	marshalSubstringAssertion(nil)
 	marshalSubstringAssertion(``)
@@ -95,4 +95,47 @@ func TestSubstringAssertion_codecov(t *testing.T) {
 	})
 
 	caseIgnoreListSubstringsMatch([]string{`ahch`, `helkl4`}, `h*lk*4`)
+}
+
+func BenchmarkNewSubstringAssertion(b *testing.B) {
+	b.StopTimer()
+	assn := [][]byte{
+		[]byte(`+1*555*134`),
+		[]byte(`substring*substring`),
+		[]byte(`substri*ng*thing`),
+		[]byte(`*substring*substring*`),
+		[]byte(`*substr*ing*end`),
+		[]byte(`substring*substring*substring`),
+		[]byte(`subst*`),
+		[]byte(`*ubstr`),
+	}
+
+	maxIdx := len(assn)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = NewSubstringAssertion(assn[i%maxIdx])
+	}
+}
+
+func BenchmarkSubstringMatch(b *testing.B) {
+	match := []byte(`substring`)
+	b.StopTimer()
+	assn := [][]byte{
+		[]byte(`+1*555*134`),
+		[]byte(`substring*substring`),
+		[]byte(`substri*ng*thing`),
+		[]byte(`*substring*substring*`),
+		[]byte(`*substr*ing*end`),
+		[]byte(`substring*substring*substring`),
+		[]byte(`subst*`),
+		[]byte(`*ubstr`),
+	}
+
+	maxIdx := len(assn)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = substringsMatch(match, assn[i%maxIdx])
+	}
 }
