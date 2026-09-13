@@ -1,7 +1,7 @@
 package syntax
 
 import (
-	"strings"
+	"bytes"
 )
 
 func caseIgnoreMatch(a, b any) (result bool, err error) {
@@ -15,21 +15,18 @@ func caseExactMatch(a, b any) (result bool, err error) {
 }
 
 func caseBasedMatch(a, b any, caseExact bool) (result bool, err error) {
-	var str1, str2 string
-	str1, err = assertString(a, 1, "string")
-	if err != nil {
+	var b1, b2 []byte
+	if b1, err = assertBytes(a, 1, "string"); err != nil {
 		return
 	}
-
-	str2, err = assertString(b, 1, "string")
-	if err != nil {
+	if b2, err = assertBytes(b, 1, "string"); err != nil {
 		return
 	}
 
 	if caseExact {
-		result = str1 == str2
+		result = beq(b1, b2)
 	} else {
-		result = strings.EqualFold(str1, str2)
+		result = beqf(b1, b2)
 	}
 
 	return
@@ -44,20 +41,21 @@ func caseExactOrderingMatch(a any, operator byte, b any) (bool, error) {
 }
 
 func caseBasedOrderingMatch(a, b any, caseExact bool, operator byte) (result bool, err error) {
-	var str1, str2 string
-	if str1, str2, err = prepareNumericStringAssertion(a, b); err == nil {
+	var b1, b2 []byte
+	if b1, b2, err = prepareNumericBytesAssertion(a, b); err == nil {
 		if caseExact {
 			if operator == GreaterOrEqual {
-				result = str1 >= str2
+				result = bytesCompare(b1, b2) >= 0
 			} else {
-				result = str1 <= str2
+				result = bytesCompare(b1, b2) <= 0
 			}
 		} else {
-			lc := strings.ToLower
+			l1 := lc(b1)
+			l2 := lc(b2)
 			if operator == GreaterOrEqual {
-				result = lc(str1) >= lc(str2)
+				result = bytesCompare(l1, l2) >= 0
 			} else {
-				result = lc(str1) <= lc(str2)
+				result = bytesCompare(l1, l2) <= 0
 			}
 		}
 	}
@@ -69,8 +67,6 @@ func caseBasedOrderingMatch(a, b any, caseExact bool, operator byte) (result boo
 caseIgnoreSubstringsMatch implements [§ 4.2.13 of RFC 4517].
 
 OID: 2.5.13.4.
-
-[§ 4.2.13 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.2.13
 */
 func caseIgnoreSubstringsMatch(a, b any) (result bool, err error) {
 	result, err = substringsMatch(a, b, true)
@@ -78,11 +74,9 @@ func caseIgnoreSubstringsMatch(a, b any) (result bool, err error) {
 }
 
 /*
-caseIgnoreSubstringsMatch implements [§ 4.2.6 of RFC 4517].
+caseExactSubstringsMatch implements [§ 4.2.6 of RFC 4517].
 
 OID: 2.5.13.7.
-
-[§ 4.2.6 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.2.6
 */
 func caseExactSubstringsMatch(a, b any) (result bool, err error) {
 	result, err = substringsMatch(a, b, false)
@@ -90,8 +84,8 @@ func caseExactSubstringsMatch(a, b any) (result bool, err error) {
 }
 
 func substringsMatch(a, b any, caseIgnore ...bool) (result bool, err error) {
-	var value string
-	if value, err = assertString(a, 1, "actual value"); err != nil {
+	var value []byte
+	if value, err = assertBytes(a, 1, "actual value"); err != nil {
 		return
 	}
 
@@ -100,93 +94,99 @@ func substringsMatch(a, b any, caseIgnore ...bool) (result bool, err error) {
 		return
 	}
 
-	caseHandler := func(val string) string { return val }
+	caseHandler := func(val []byte) []byte { return val }
 
-	if len(caseIgnore) > 0 {
-		if caseIgnore[0] {
-			caseHandler = strings.ToLower
-		}
+	if len(caseIgnore) > 0 && caseIgnore[0] {
+		caseHandler = lc
 	}
 
 	value = caseHandler(value)
 
-	if B.Any == nil {
+	if len(B.Any) == 0 {
 		err = errorBadType("Missing SubstringAssertion.Any")
 		return
 	}
 
-	if B.Initial != nil {
-		initialStr := caseHandler(string(B.Initial))
-
-		if !strings.HasPrefix(value, initialStr) {
+	if len(B.Initial) > 0 {
+		initial := caseHandler([]byte(B.Initial))
+		if !bHasPfx(value, initial) {
 			return
 		}
-		value = strings.TrimPrefix(value, initialStr)
+		value = value[len(initial):]
 	}
 
-	anyStr := `*` + strings.Trim(caseHandler(string(B.Any)), `*`) + `*`
-	substrings := strings.Split(anyStr, "*")
+	Any := trimStars(caseHandler([]byte(B.Any)))
+
+	substrings := splitOnByte(Any, '*')
 	for _, substr := range substrings {
-		index := strings.Index(value, substr)
-		if index == -1 {
+		if len(substr) == 0 {
+			continue
+		}
+		idx := bytes.Index(value, substr)
+		if idx == -1 {
 			return
 		}
-		value = value[index+len(substr):]
+		value = value[idx+len(substr):]
 	}
 
-	if B.Final != nil {
-		finalStr := caseHandler(string(B.Final))
-		result = strings.HasSuffix(value, finalStr)
+	if len(B.Final) > 0 {
+		final := caseHandler([]byte(B.Final))
+		result = bHasSfx(value, final)
 		return
 	}
 
 	result = true
-
 	return
 }
 
-func prepareStringListAssertion(a, b any) (str1, str2 string, err error) {
-	assertSubstringsList := func(x any) (list string, err error) {
-		var ok bool
-		var slices []string
-		if slices, ok = x.([]string); ok {
-			list = strings.Join(slices, ``)
-			list = strings.ReplaceAll(list, `\\`, ``)
-			list = strings.ReplaceAll(list, `$`, ``)
-		} else {
-			errorBadType("substringslist")
+func prepareStringListAssertion(a, b any) (b1, b2 []byte, err error) {
+	assertSubstringsList := func(x any) (list []byte, err error) {
+		slices, ok := x.([][]byte)
+		if !ok {
+			err = errorBadType("substringslist")
+			return
 		}
+
+		var buf []byte
+		for _, s := range slices {
+			buf = append(buf, s...)
+		}
+
+		// remove escaped backslashes and dollars
+		buf = bRepAll(buf, []byte(`\\`), nil)
+		buf = bRepAll(buf, []byte(`$`), nil)
+
+		list = buf
 		return
 	}
 
-	if str1, err = assertSubstringsList(a); err == nil {
-		str2, err = assertSubstringsList(b)
+	if b1, err = assertSubstringsList(a); err == nil {
+		b2, err = assertSubstringsList(b)
 	}
 
 	return
 }
 
 func caseIgnoreListSubstringsMatch(a, b any) (result bool, err error) {
-	var str1, str2 string
-	if str1, str2, err = prepareStringListAssertion(a, b); err == nil {
-		result, err = caseIgnoreSubstringsMatch(str1, str2)
+	var b1, b2 []byte
+	if b1, b2, err = prepareStringListAssertion(a, b); err == nil {
+		result, err = caseIgnoreSubstringsMatch(b1, b2)
 	}
-
 	return
 }
 
 func caseIgnoreListMatch(a, b any) (result bool, err error) {
-	var strs1, strs2 []string
-	if strs1, strs2, err = assertLists(a, b); err != nil {
+	var l1, l2 [][]byte
+	if l1, l2, err = assertByteLists(a, b); err != nil {
 		return
 	}
 
-	if len(strs1) != len(strs2) {
+	if len(l1) != len(l2) {
 		return
 	}
 
-	for idx, slice := range strs1 {
-		if !strings.EqualFold(slice, strs2[idx]) || slice == "" {
+	for idx, slice := range l1 {
+		if len(slice) == 0 || !beqf(slice, l2[idx]) {
 			return
 		}
 	}
@@ -195,15 +195,15 @@ func caseIgnoreListMatch(a, b any) (result bool, err error) {
 	return
 }
 
-func assertLists(a, b any) (strs1, strs2 []string, err error) {
+func assertByteLists(a, b any) (l1, l2 [][]byte, err error) {
 	var ok bool
 
-	if strs1, ok = a.([]string); !ok {
+	if l1, ok = a.([][]byte); !ok {
 		err = errorBadType("list")
 		return
 	}
 
-	if strs2, ok = b.([]string); !ok {
+	if l2, ok = b.([][]byte); !ok {
 		err = errorBadType("list")
 	}
 
@@ -219,21 +219,20 @@ func caseIgnoreIA5Match(a, b any) (bool, error) {
 }
 
 func caseBasedIA5Match(a, b any, caseExact bool) (result bool, err error) {
-	var str1, str2 string
-	if str1, err = assertString(a, 1, "ia5String"); err != nil {
+	var b1, b2 []byte
+	if b1, err = assertBytes(a, 1, "ia5String"); err != nil {
+		return
+	}
+	if b2, err = assertBytes(b, 1, "ia5String"); err != nil {
 		return
 	}
 
-	if str2, err = assertString(b, 1, "ia5String"); err != nil {
-		return
-	}
-
-	if err = checkIA5String(str1); err == nil {
-		if err = checkIA5String(str2); err == nil {
+	if _, err = marshalIA5String(b1); err == nil {
+		if _, err = marshalIA5String(b2); err == nil {
 			if caseExact {
-				result = str1 == str2
+				result = beq(b1, b2)
 			} else {
-				result = strings.EqualFold(str1, str2)
+				result = beqf(b1, b2)
 			}
 		}
 	}
@@ -241,29 +240,41 @@ func caseBasedIA5Match(a, b any, caseExact bool) (result bool, err error) {
 	return
 }
 
-func prepareIA5StringAssertion(a, b any) (str1, str2 string, err error) {
-	assertIA5 := func(x any) (i string, err error) {
-		var raw string
-		if raw, err = assertString(x, 1, "IA5String"); err == nil {
-			if err = checkIA5String(raw); err == nil {
+func prepareIA5StringAssertion(a, b any) (b1, b2 []byte, err error) {
+	assertIA5 := func(x any) (i []byte, err error) {
+		var raw []byte
+		if raw, err = assertBytes(x, 1, "IA5String"); err == nil {
+			if _, err = marshalIA5String(raw); err == nil {
 				i = raw
 			}
 		}
 		return
 	}
 
-	if str1, err = assertIA5(a); err == nil {
-		str2, err = assertIA5(b)
+	if b1, err = assertIA5(a); err == nil {
+		b2, err = assertIA5(b)
 	}
 
 	return
 }
 
 func caseIgnoreIA5SubstringsMatch(a, b any) (result bool, err error) {
-	var str1, str2 string
-	if str1, str2, err = prepareIA5StringAssertion(a, b); err == nil {
-		result, err = caseIgnoreSubstringsMatch(str1, str2)
+	var b1, b2 []byte
+	if b1, b2, err = prepareIA5StringAssertion(a, b); err == nil {
+		result, err = caseIgnoreSubstringsMatch(b1, b2)
 	}
+	return
+}
 
+func prepareNumericBytesAssertion(a, b any) (b1, b2 []byte, err error) {
+	var s1, s2 []byte
+	if s1, err = assertBytes(a, 1, "string"); err != nil {
+		return
+	}
+	if s2, err = assertBytes(b, 1, "string"); err != nil {
+		return
+	}
+	b1 = s1
+	b2 = s2
 	return
 }
