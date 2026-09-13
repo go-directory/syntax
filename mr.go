@@ -13,19 +13,19 @@ results in a greater or equal (GE) comparison.
 const GreaterOrEqual byte = 0x1
 
 /*
-MatchingRuleAssertion implements an [EqualityRuleAssertion],
+MatchingRuleAssertionFunc implements an [EqualityRuleAssertion],
 [SubstringsRuleAssertion] or [OrderingRuleAssertion] function
 or method.
 */
-type MatchingRuleAssertion interface {
+type MatchingRuleAssertionFunc interface {
 	isMatchingRuleAssertionFunction()
 }
 
 /*
 EqualityRuleAssertion defines a closure signature held by qualifying
-function instances intended to implement an Equality MatchingRuleAssertion.
+function instances intended to implement an Equality MatchingRuleAssertionFunc.
 
-The semantics of the MatchingRuleAssertion are discussed in [§ 4.1 of
+The semantics of the MatchingRuleAssertionFunc are discussed in [§ 4.1 of
 RFC 4517].
 
 [§ 4.1 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.1
@@ -36,9 +36,9 @@ func (r EqualityRuleAssertion) isMatchingRuleAssertionFunction() {}
 
 /*
 SubstringsRuleAssertion defines a closure signature held by qualifying
-function instances intended to implement a Substrings MatchingRuleAssertion.
+function instances intended to implement a Substrings MatchingRuleAssertionFunc.
 
-The semantics of the MatchingRuleAssertion are discussed in [§ 4.1 of
+The semantics of the MatchingRuleAssertionFunc are discussed in [§ 4.1 of
 RFC 4517].
 
 [§ 4.1 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.1
@@ -49,9 +49,9 @@ func (r SubstringsRuleAssertion) isMatchingRuleAssertionFunction() {}
 
 /*
 OrderingRuleAssertion defines a closure signature held by qualifying
-function instances intended to implement an Ordering MatchingRuleAssertion.
+function instances intended to implement an Ordering MatchingRuleAssertionFunc.
 
-The semantics of the MatchingRuleAssertion are discussed in [§ 4.1 of
+The semantics of the MatchingRuleAssertionFunc are discussed in [§ 4.1 of
 RFC 4517].
 
 [§ 4.1 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.1
@@ -60,10 +60,10 @@ type OrderingRuleAssertion func(any, byte, any) (bool, error)
 
 func (r OrderingRuleAssertion) isMatchingRuleAssertionFunction() {}
 
-var MatchingRuleAssertions map[string]MatchingRuleAssertion
+var MatchingRuleAssertionFuncs map[string]MatchingRuleAssertionFunc
 
 func init() {
-	MatchingRuleAssertions = map[string]MatchingRuleAssertion{
+	MatchingRuleAssertionFuncs = map[string]MatchingRuleAssertionFunc{
 		"2.5.13.0":                   EqualityRuleAssertion(objectIdentifierMatch),
 		"2.5.13.1":                   EqualityRuleAssertion(distinguishedNameMatch),
 		"2.5.13.2":                   EqualityRuleAssertion(caseIgnoreMatch),
