@@ -67,18 +67,14 @@ func TestFacsimileTelephoneNumber(t *testing.T) {
 }
 
 func TestTelephoneNumber_SubstringMatch(t *testing.T) {
-	for key, value := range map[string][]string{
-		`+1 555 555 FILK`: {
-			`+1*55555F*LK`,
-		},
+	for key, value := range map[string][]byte{
+		`+1 555 555 FILK`: []byte(`+1*55555F*LK`),
 	} {
-		for _, val := range value {
-			if result, err := telephoneNumberSubstringsMatch(key, val); err != nil {
-				t.Errorf("%s failed: %v", t.Name(), err)
-			} else if !result {
-				t.Errorf("%s failed:\nwant: %t\ngot:  %t",
-					t.Name(), true, result)
-			}
+		if result, err := telephoneNumberSubstringsMatch([]byte(key), value); err != nil {
+			t.Errorf("%s failed: %v", t.Name(), err)
+		} else if !result {
+			t.Errorf("%s failed:\nwant: %t\ngot:  %t",
+				t.Name(), true, result)
 		}
 	}
 }
@@ -126,14 +122,14 @@ func TestTelephony_codecov(t *testing.T) {
 	var ffax FacsimileTelephoneNumber
 	ffax.isSet(10394)
 
-	_ = teletexSuffixValue(`ds世3`)
-	_, _, _ = marshalTeletex([]string{})
-	_, _, _ = marshalTeletex([]string{"a", "b", "c"})
-	_, _, _ = marshalTeletex([]string{"graphic:this", "control:34", "misc:misc", "page:48", "private:psst"})
-	_, _, _ = marshalTeletex([]string{"graphic:this", "control:34", "misc:misc", "page:48", "private:psst", "graphic:this", "control:34", "misc:misc", "page:48", "private:psst"})
-	var uboverflow []string
+	_ = teletexSuffixValue([]byte(`ds世3`))
+	_, _, _ = marshalTeletex([][]byte{})
+	_, _, _ = marshalTeletex([][]byte{[]byte("a"), []byte("b"), []byte("c")})
+	_, _, _ = marshalTeletex([][]byte{[]byte("graphic:this"), []byte("control:34"), []byte("misc:misc"), []byte("page:48"), []byte("private:psst")})
+	_, _, _ = marshalTeletex([][]byte{[]byte("graphic:this"), []byte("control:34"), []byte("misc:misc"), []byte("page:48"), []byte("private:psst"), []byte("graphic:this"), []byte("control:34"), []byte("misc:misc"), []byte("page:48"), []byte("private:psst")})
+	var uboverflow [][]byte
 	for len(uboverflow) < UBTeletexTerminalID+1 {
-		uboverflow = append(uboverflow, "graphic:this")
+		uboverflow = append(uboverflow, []byte("graphic:this"))
 	}
 
 	_, _, _ = marshalTeletex(uboverflow)
@@ -157,7 +153,7 @@ func TestTelephony_codecov(t *testing.T) {
 	_, _ = marshalTelexNumber("👩$1223$618$...$👩")
 	_, _ = marshalTelexNumber(`1 555 123 4567$`)
 
-	teletexSuffixValue(`$$`)
-	teletexSuffixValue(`@_+`)
-	teletexSuffixValue(`\\\\\`)
+	teletexSuffixValue([]byte(`$$`))
+	teletexSuffixValue([]byte(`@_+`))
+	teletexSuffixValue([]byte(`\\\\\`))
 }
