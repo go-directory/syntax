@@ -1,4 +1,4 @@
-package x509
+package syntax
 
 import (
 	"bytes"
@@ -60,7 +60,7 @@ func TestParseDER_SimpleSequence(t *testing.T) {
 		octets(0x03),
 	)
 
-	tlv, err := ParseDER(b)
+	tlv, _, err := parseX509(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestParseDER_SimpleSequence(t *testing.T) {
 	}
 }
 
-func TestParseCertificatePair(t *testing.T) {
+func TestNewCertificatePair(t *testing.T) {
 	forward := octets(0xAA)
 	reverse := octets(0xBB)
 
@@ -82,7 +82,7 @@ func TestParseCertificatePair(t *testing.T) {
 		ctxSeq(1, reverse),
 	)
 
-	cp, err := ParseCertificatePair(b)
+	cp, err := NewCertificatePair(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,13 +95,13 @@ func TestParseCertificatePair(t *testing.T) {
 	}
 }
 
-func TestParseAlgorithmIdentifier(t *testing.T) {
+func TestNewAlgorithmIdentifier(t *testing.T) {
 	algOID := oid(0x2A, 0x03) // synthetic OID
 	params := octets(0x99)
 
 	b := seq(algOID, params)
 
-	ai, err := ParseAlgorithmIdentifier(b)
+	ai, err := NewAlgorithmIdentifier(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestParseAlgorithmIdentifier(t *testing.T) {
 	}
 }
 
-func TestParseCertificateAssertion(t *testing.T) {
+func TestNewCertificateAssertion(t *testing.T) {
 	issuer := octets(0x01)
 	serial := octets(0x02)
 	subject := octets(0x03)
@@ -125,7 +125,7 @@ func TestParseCertificateAssertion(t *testing.T) {
 		ctxPrim(2, subject[2:]),
 	)
 
-	ca, err := ParseCertificateAssertion(b)
+	ca, err := NewCertificateAssertion(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,14 +141,14 @@ func TestParseCertificateAssertion(t *testing.T) {
 	}
 }
 
-func TestParseCRLAssertion(t *testing.T) {
+func TestNewCRLAssertion(t *testing.T) {
 	issuer := octets(0xAB)
 
 	b := seq(
 		ctxPrim(0, issuer[2:]),
 	)
 
-	ca, err := ParseCRLAssertion(b)
+	ca, err := NewCRLAssertion(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,30 +201,30 @@ func derFromPEM(pemData []byte) []byte {
 	return block.Bytes
 }
 
-func TestParseCertificateDER(t *testing.T) {
+func TestNewCertificate(t *testing.T) {
 	der := derFromPEM(testCert)
 	if der == nil {
 		t.Fatal("no cert PEM block")
 	}
 
-	cert, err := ParseCertificateDER(der)
+	cert, err := NewCertificate(der)
 	if err != nil {
-		t.Fatalf("ParseCertificateDER: %v", err)
+		t.Fatalf("NewCertificate: %v", err)
 	}
 	if cert.Raw == nil || len(cert.Raw) == 0 {
 		t.Fatalf("empty Raw cert")
 	}
 }
 
-func TestParseCRLDER(t *testing.T) {
+func TestNewCRL(t *testing.T) {
 	der := derFromPEM(testCRL)
 	if der == nil {
 		t.Fatal("no CRL PEM block")
 	}
 
-	crl, err := ParseCRLDER(der)
+	crl, err := NewCRL(der)
 	if err != nil {
-		t.Fatalf("ParseCRLDER: %v", err)
+		t.Fatalf("NewCRL: %v", err)
 	}
 	if crl.TBSCertList.Raw == nil || len(crl.TBSCertList.Raw) == 0 {
 		t.Fatalf("empty TBSCertList")
