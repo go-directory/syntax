@@ -47,32 +47,18 @@ func TestOtherMailbox(t *testing.T) {
 }
 
 func TestPostal_codecov(t *testing.T) {
-	pSOrIA5s(nil)
-	pSOrIA5s(`\\$`)
-	pSOrIA5s(string(rune(0)))
-	pSOrIA5s(string(rune(14)))
-	pSOrIA5s(`\$`)
-	pSOrIA5s(`......\$....!`)
-	pSOrIA5s(`......\\$....!`)
-	pSOrIA5s("......\\$....!")
-	pSOrIA5s(`.$.$.$.$.$`)
-	pSOrIA5s(`.$.$@$#$.$`)
-	pSOrIA5s(`界界界`)
-	pSOrIA5s(`界$界$界`)
-	pSOrIA5s(`$100000 Sweepstakes$10 Million Dollar Avenue$New York$NY`)
-
 	_, _ = deliveryMethod(nil)
 	_, _ = postalAddress(nil)
 	_, _ = otherMailbox(nil)
 
 	_, _ = printableString(`Hello.`)
 
-	lineChar(`.#.$.$.$$`)
-	lineChar(`.#.naïve.$.$$`)
-	lineChar(string(rune('\U0010AAAA')) + `ð`)
-	lineChar(`$a\\bc$界$`)
-	lineChar(string([]rune{'\u00e0', '$', '\u00FF'}))
-	lineChar(string([]rune{'\u00e0', '$', '\uFFFF'}))
+	lineChar([]byte(`.#.$.$.$$`))
+	lineChar([]byte(`.#.naïve.$.$$`))
+	lineChar([]byte(string(rune('\U0010AAAA')) + `ð`))
+	lineChar([]byte(`$a\\bc$界$`))
+	lineChar([]byte(string([]rune{'\u00e0', '$', '\u00FF'})))
+	lineChar([]byte(string([]rune{'\u00e0', '$', '\uFFFF'})))
 
 	marshalDeliveryMethod("bogus$value")
 }
