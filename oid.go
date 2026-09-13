@@ -6,11 +6,12 @@ OBJECT IDENTIFIER type.
 */
 
 import (
-	"errors"
 	"math"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/go-directory/encoding/vlq"
 )
 
 /*
@@ -75,6 +76,8 @@ to verify valid numeric OID or descriptor syntax of input argument x.
 */
 func oID(x any) (result bool, err error) {
 	switch tv := x.(type) {
+	case []byte:
+		result, err = oID(string(tv))
 	case string:
 		// try descriptor first
 		if _, err = isDescr(tv); err != nil {
@@ -84,7 +87,7 @@ func oID(x any) (result bool, err error) {
 		result = err == nil
 	case ObjectIdentifier:
 		if result = tv.Valid(); !result {
-			err = errors.New("Invalid ObjectIdentifier syntax")
+			err = syntaxError("Invalid ObjectIdentifier syntax")
 		}
 	}
 
@@ -103,18 +106,18 @@ in that:
 */
 func isDescr(val string) (result bool, err error) {
 	if len(val) == 0 {
-		err = errors.New("zero length OID descriptor")
+		err = syntaxError("zero length OID descriptor")
 		return
 	}
 
 	if !isAlpha(rune(val[0])) {
-		err = errors.New("OID descriptor must begin with an alpha, got " + string(val[0]))
+		err = syntaxError("OID descriptor must begin with an alpha, got ", string(val[0]))
 		return
 	}
 
 	L := len(val) - 1
 	if rune(val[L]) == '-' {
-		err = errors.New("OID descriptor cannot end in a hyphen")
+		err = syntaxError("OID descriptor cannot end in a hyphen")
 		return
 	}
 
@@ -134,12 +137,12 @@ func isDescr(val string) (result bool, err error) {
 		case ch == '-':
 			if lastHyphen {
 				// cannot use consecutive hyphens
-				err = errors.New("OID descriptor cannot contain consecutive hyphens")
+				err = syntaxError("OID descriptor cannot contain consecutive hyphens")
 				break
 			}
 			lastHyphen = true
 		default:
-			err = errors.New("invalid character for OID descriptor: (none of [a-zA-Z0-9\\-])")
+			err = syntaxError("invalid character for OID descriptor: (none of [a-zA-Z0-9\\-])")
 		}
 	}
 
@@ -191,6 +194,10 @@ func NewObjectIdentifier(x ...any) (r ObjectIdentifier, err error) {
 			// single string input
 			r, err = newObjectIdentifierStr(slice)
 			return
+		} else if slice, ok := x[0].([]byte); ok {
+			// single string input
+			r, err = newObjectIdentifierStr(string(slice))
+			return
 		} else if slice2, ok := x[0].(ObjectIdentifier); ok {
 			// check OID as valid
 			if !slice2.Valid() {
@@ -208,7 +215,7 @@ func NewObjectIdentifier(x ...any) (r ObjectIdentifier, err error) {
 	for i := 0; i < len(x) && err == nil; i++ {
 		var nf numberForm
 		switch tv := x[i].(type) {
-		case *big.Int, numberForm, string, int32, int64, uint64, int:
+		case *big.Int, numberForm, []byte, string, int32, int64, uint64, int:
 			nf, err = newNumberForm(tv)
 		default:
 			err = errorOIDBadType
@@ -254,7 +261,8 @@ IntSlice returns slices of integer values and an error. The integer values are b
 upon the contents of the receiver. Note that if any single arc number overflows int,
 a zero slice is returned.
 
-Successful output can be cast as an instance of [encoding/asn1.ObjectIdentifier], if desired.
+Successful output can be cast as an instance of [encoding/asn1.ObjectIdentifier], if
+desired.
 */
 func (r ObjectIdentifier) IntSlice() (slice []int, err error) {
 	if r.IsZero() {
@@ -368,67 +376,68 @@ func (r ObjectIdentifier) Encode() ([]byte, error) {
 	second := r[1]
 
 	// First-two-arc compression: (first * 40) + second
-	var combined numberForm
+	var wire []byte
 
 	if !second.big {
 		// first is ALWAYS native, second is native here
-		combined = numberForm{
-			ok:     true,
-			native: first.native*40 + second.native,
-		}
+		wire = vlq.Encode[uint64](first.native*40 + second.native)
 	} else {
 		// second is big, so we must use big.Int math
 		tmp := newBigInt(0).Mul(newBigInt(0).SetUint64(first.native), newBigInt(40))
 		tmp.Add(tmp, second.bigInt)
-		combined = numberForm{
-			ok:     true,
-			big:    true,
-			bigInt: tmp,
-		}
+		wire = vlq.Encode[*big.Int](tmp)
 	}
-
-	// Encode first two arcs
-	wire := vlqEncode(combined)
 
 	// Encode remaining arcs
 	for i := 2; i < r.Len(); i++ {
-		wire = append(wire, vlqEncode(r[i])...)
+		if r[i].big {
+			wire = append(wire, vlq.Encode[*big.Int](r[i].bigInt)...)
+		} else {
+			wire = append(wire, vlq.Encode[uint64](r[i].native)...)
+		}
 	}
 
 	return wire, nil
 }
 
 /*
-Decode returns an error following an attempt to decode the input buf bytes
+Decode returns an error following an attempt to decode the input enc bytes
 into the receiver instance. Any data present in the receiver instance will
 be destroyed.
 */
-func (r *ObjectIdentifier) Decode(buf []byte) error {
-	if len(buf) < 1 {
+func (r *ObjectIdentifier) Decode(enc []byte) error {
+	if len(enc) < 1 {
 		return errorOIDBadEnc
 	}
 
-	p := 0
+	var (
+		dec  any
+		p    int
+		bigi bool
+		err  error
+	)
 
-	// Decode combined first+second arc as numberForm
-	combined, err := vlqDecode(buf, &p)
+	// Decode combined first+second arc as native or big
+	if bigi = len(enc) > 10; bigi {
+		dec, err = vlq.Decode[*big.Int](enc, &p)
+	} else {
+		dec, err = vlq.Decode[uint64](enc, &p)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	// Reject combined values 120..159 (these correspond to illegal root 3.x)
-	if !combined.big {
-		v := combined.native
-		if v >= 120 && v < 160 {
-			return errorOIDBadFirstArcs
-		}
-	}
-
 	var firstNF, secondNF numberForm
 
-	if !combined.big {
+	if !bigi {
 		// Native path
-		v := combined.native
+		v := dec.(uint64)
+		if v >= 120 && v < 160 {
+			// Reject combined values 120..159 (these
+			// correspond to illegal root 3.x)
+			return errorOIDBadFirstArcs
+		}
 
 		switch {
 		case v < 40:
@@ -447,7 +456,7 @@ func (r *ObjectIdentifier) Decode(buf []byte) error {
 	} else {
 		// Big path: combined is big.Int
 		// For big combined, it must be >= 80: first = 2, second = combined - 80
-		tmp := newBigInt(0).Set(combined.bigInt)
+		tmp := newBigInt(0).Set(dec.(*big.Int))
 		tmp.Sub(tmp, newBigInt(80))
 
 		firstNF = numberForm{ok: true, native: 2}
@@ -458,10 +467,22 @@ func (r *ObjectIdentifier) Decode(buf []byte) error {
 	arcs = append(arcs, firstNF, secondNF)
 
 	// Remaining arcs
-	for p < len(buf) && err == nil {
-		var nf numberForm
-		if nf, err = vlqDecode(buf, &p); err == nil {
-			arcs = append(arcs, nf)
+	L := len(enc)
+	for p < L && err == nil {
+		var n any
+		if L-p > 10 {
+			n, err = vlq.Decode[*big.Int](enc, &p)
+			arcs = append(arcs, numberForm{
+				big:    true,
+				ok:     true,
+				bigInt: n.(*big.Int),
+			})
+		} else {
+			n, err = vlq.Decode[uint64](enc, &p)
+			arcs = append(arcs, numberForm{
+				ok:     true,
+				native: n.(uint64),
+			})
 		}
 	}
 
@@ -523,6 +544,8 @@ func assertNumberForm[T any](v T) (i numberForm, err error) {
 		i = numberForm{native: uint64(value)}
 	case string:
 		i, err = strToNumberForm(value)
+	case []byte:
+		i, err = strToNumberForm(string(value))
 	case numberForm:
 		if !value.ok {
 			err = errorNFNil
@@ -814,7 +837,7 @@ func objectIdentifierFirstComponentMatch(sequence, assertionValue any) (result b
 	// the objectIdentifierMatch call (below) to be successful.
 	componentValue := assertFirstStructField(sequence)
 	if componentValue == nil {
-		err = errors.New("not a valid sequence, or sequence has no fields")
+		err = syntaxError("not a valid sequence, or sequence has no fields")
 		return
 	}
 
@@ -840,7 +863,7 @@ func resolveDescrToOID(a any) (o ObjectIdentifier, err error) {
 	if err != nil {
 		err = errorUnknownOIDDescr
 	} else if o == nil {
-		err = errors.New("OID resolution error: unregistered descriptor " + str)
+		err = syntaxError("OID resolution error: unregistered descriptor ", str)
 	}
 
 	return
@@ -854,21 +877,39 @@ func (r numberForm) Encode() ([]byte, error) {
 	if !r.ok {
 		return nil, errorNFNil
 	}
-	enc := vlqEncode(r)
+
+	var enc []byte
+	if r.big {
+		enc = vlq.Encode[*big.Int](r.bigInt)
+	} else {
+		enc = vlq.Encode[uint64](r.native)
+	}
+
 	return enc, nil
 }
 
 /*
-Decode returns an error following an attempt to decode the input buf bytes
+Decode returns an error following an attempt to decode the input enc bytes
 into the receiver instance. Any data present in the receiver instance will
 be destroyed.
 */
-func (r *numberForm) Decode(buf []byte) error {
+func (r *numberForm) Decode(enc []byte) error {
 	p := 0
-	n, err := vlqDecode(buf, &p)
-	if err == nil {
-		*r = n
+
+	var err error
+	var n any
+
+	if len(enc) > 10 {
+		n, err = vlq.Decode[*big.Int](enc, &p)
+		r.bigInt = n.(*big.Int)
+		r.big = true
+		r.ok = true
+	} else {
+		n, err = vlq.Decode[uint64](enc, &p)
+		r.native = n.(uint64)
+		r.ok = true
 	}
+
 	return err
 }
 
@@ -919,128 +960,6 @@ func bEToNumberForm(b []byte) (i numberForm) {
 	return
 }
 
-func vlqEncode(nf numberForm) []byte {
-	if !nf.ok {
-		return nil
-	}
-
-	if nf.big {
-		return vlqEncodeBig(nf.bigInt)
-	}
-	return vlqEncodeUint64(nf.native)
-}
-
-func vlqEncodeUint64(n uint64) []byte {
-	if n == 0 {
-		return []byte{0}
-	}
-
-	var buf [16]byte
-	i := len(buf)
-
-	for n > 0 {
-		i--
-		b := byte(n & 0x7F) // take 7 bits
-		n >>= 7
-
-		if len(buf)-i > 1 { // set continuation bit except on last octet
-			b |= 0x80
-		}
-		buf[i] = b
-	}
-
-	return buf[i:]
-}
-
-func vlqEncodeBig(n *big.Int) []byte {
-	if n.Sign() == 0 {
-		return []byte{0}
-	}
-
-	tmp := newBigInt(0).Set(n)
-	rem := newBigInt(0)
-
-	out := make([]byte, 0, 16)
-
-	for tmp.Sign() != 0 {
-		tmp.DivMod(tmp, newBigInt(128), rem)
-		b := byte(rem.Uint64())
-		out = append(out, b)
-	}
-
-	// reverse and set continuation bits
-	for i := 0; i < len(out)/2; i++ {
-		out[i], out[len(out)-1-i] = out[len(out)-1-i], out[i]
-	}
-
-	for i := 0; i < len(out)-1; i++ {
-		out[i] |= 0x80
-	}
-
-	return out
-}
-
-// Top-level dispatcher: choose native or big based on magnitude.
-func vlqDecode(buf []byte, p *int) (numberForm, error) {
-	u, done, err := vlqDecodeUint64(buf, p)
-	if err != nil {
-		return numberForm{}, err
-	}
-	if done {
-		return numberForm{ok: true, native: u}, nil
-	}
-	return vlqDecodeBig(buf, p, u)
-}
-
-func vlqDecodeUint64(buf []byte, p *int) (uint64, bool, error) {
-	var u uint64
-
-	for {
-		if *p >= len(buf) {
-			return 0, false, errorNFBadVLQ
-		}
-
-		b := buf[*p]
-		seven := uint64(b & 0x7F)
-
-		// Would shifting overflow?
-		if u > (^(uint64(0)) >> 7) {
-			// Do NOT consume this byte; let big path handle it.
-			return u, false, nil
-		}
-
-		// Safe to consume
-		*p++
-		u = (u << 7) | seven
-
-		if b&0x80 == 0 {
-			return u, true, nil
-		}
-	}
-}
-
-func vlqDecodeBig(buf []byte, p *int, prefix uint64) (numberForm, error) {
-	n := newBigInt(0).SetUint64(prefix)
-
-	for {
-		if *p >= len(buf) {
-			return numberForm{}, errorNFBadVLQ
-		}
-
-		b := buf[*p]
-		*p++
-
-		seven := int64(b & 0x7F)
-
-		n.Lsh(n, 7)
-		n.Or(n, newBigInt(seven))
-
-		if b&0x80 == 0 {
-			return numberForm{ok: true, big: true, bigInt: n}, nil
-		}
-	}
-}
-
 /*
 OIDMap contains a user-populated numeric OID to descriptor slices map.
 
@@ -1057,24 +976,24 @@ Set this variable to nil to disable OID resolution.
 var OIDMap map[string][]string
 
 var (
-	errorNFNegative = errors.New("NUMBER FORM: negative numbers prohibited")
-	errorNFNil      = errors.New("NUMBER FORM: nil or bogus instance")
-	errorNFBadType  = errors.New("NUMBER FORM: unsupported input type")
-	errorNFNoInput  = errors.New("NUMBER FORM: nil or zero input")
-	errorNFOctal    = errors.New("NUMBER FORM: leading zeroes (octal numbers) prohibited")
-	errorNFBadVLQ   = errors.New("NUMBER FORM: truncated VLQ")
-	errorNFBadBE    = errors.New("NUMBER FORM: invalid BE input bytes")
-	errorNFNaN      = errors.New("NUMBER FORM: non numeric character found")
+	errorNFNegative = syntaxError("NUMBER FORM: negative numbers prohibited")
+	errorNFNil      = syntaxError("NUMBER FORM: nil or bogus instance")
+	errorNFBadType  = syntaxError("NUMBER FORM: unsupported input type")
+	errorNFNoInput  = syntaxError("NUMBER FORM: nil or zero input")
+	errorNFOctal    = syntaxError("NUMBER FORM: leading zeroes (octal numbers) prohibited")
+	errorNFBadVLQ   = syntaxError("NUMBER FORM: truncated VLQ")
+	errorNFBadBE    = syntaxError("NUMBER FORM: invalid BE input bytes")
+	errorNFNaN      = syntaxError("NUMBER FORM: non numeric character found")
 
-	errorOIDMinLen         = errors.New("OBJECT IDENTIFIER: two (2) or more arcs required")
-	errorOIDNil            = errors.New("OBJECT IDENTIFIER: nil or bogus instance")
-	errorOIDBadType        = errors.New("OBJECT IDENTIFIER: unsupported input type")
-	errorOIDBadFirstArcs   = errors.New("OBJECT IDENTIFIER: illegal first and/or second level arcs")
-	errorOIDBadEnc         = errors.New("OBJECT IDENTIFIER: bad encoding")
-	errorOIDOIVBadNames    = errors.New("OBJECT IDENTIFIER: no nameForms at input for OIV init")
-	errorOIDOIVBadNamesLen = errors.New("OBJECT IDENTIFIER: nameForm ct MUST be equal length for OIV init")
+	errorOIDMinLen         = syntaxError("OBJECT IDENTIFIER: two (2) or more arcs required")
+	errorOIDNil            = syntaxError("OBJECT IDENTIFIER: nil or bogus instance")
+	errorOIDBadType        = syntaxError("OBJECT IDENTIFIER: unsupported input type")
+	errorOIDBadFirstArcs   = syntaxError("OBJECT IDENTIFIER: illegal first and/or second level arcs")
+	errorOIDBadEnc         = syntaxError("OBJECT IDENTIFIER: bad encoding")
+	errorOIDOIVBadNames    = syntaxError("OBJECT IDENTIFIER: no nameForms at input for OIV init")
+	errorOIDOIVBadNamesLen = syntaxError("OBJECT IDENTIFIER: nameForm ct MUST be equal length for OIV init")
 
-	errorUnknownOIDDescr = errors.New("Undefined: unknown descr for OID")
+	errorUnknownOIDDescr = syntaxError("Undefined: unknown descr for OID")
 )
 
 func init() {
