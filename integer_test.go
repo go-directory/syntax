@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func BenchmarkIntegerASN1(b *testing.B) {
+	o, _ := NewInteger(327597823)
+	b.StopTimer()
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		enc, _ := o.Encode()
+		var dec Integer
+		_ = dec.Decode(enc)
+	}
+}
+
 func ExampleInteger_roundTripBER() {
 	i, err := NewInteger(1478231)
 	if err != nil {
