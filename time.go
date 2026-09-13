@@ -6,7 +6,6 @@ those for Generalized Time and the (deprecated) UTC Time.
 */
 
 import (
-	"errors"
 	"time"
 )
 
@@ -101,7 +100,7 @@ func genTimeFracDiffFormat(raw, base, diff, format string) (string, error) {
 		format += string(".")
 		for fidx, ch := range base[1:] {
 			if fidx > 6 {
-				err = errors.New(`Fraction exceeds Generalized Time fractional limit`)
+				err = syntaxError(`Fraction exceeds Generalized Time fractional limit`)
 			} else if isDigit(ch) {
 				format += `0`
 				continue
@@ -291,7 +290,7 @@ func timeMatch(rcv, assert any, operator ...byte) (result bool, err error) {
 			ut, err = marshalUTCTime(tv)
 			c = ut.Cast().UTC()
 		default:
-			err = errors.New("invalid GeneralizedTime or UTCTime format")
+			err = syntaxError("invalid GeneralizedTime or UTCTime format")
 		}
 	default:
 		err = errorBadType("GeneralizedTime")
