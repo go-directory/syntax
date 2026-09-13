@@ -1,7 +1,7 @@
 package syntax
 
 import (
-	"errors"
+	"bytes"
 	"strconv"
 	"strings"
 )
@@ -45,7 +45,7 @@ From [ITU-T Rec. X.520, clause 9.2.11]:
 [ITU-T Rec. X.520, clause 9.2.11]: https://www.itu.int/rec/T-REC-X.520
 */
 type EnhancedGuide struct {
-	ObjectClass string   `asn1:"tag:0"`
+	ObjectClass []byte   `asn1:"tag:0"`
 	Criteria    Criteria `asn1:"tag:1"`
 	Subset      int      `asn1:"tag:2,default:1"`
 }
@@ -64,23 +64,24 @@ func enhancedGuide(x any) (result bool, err error) {
 }
 
 func marshalEnhancedGuide(x any) (g EnhancedGuide, err error) {
-	var raw string
-	if raw, err = assertString(x, 5, "Enhanced Guide"); err != nil {
+	var raw []byte
+	if raw, err = assertBytes(x, 5, "Enhanced Guide"); err != nil {
 		return
 	}
 
-	raws := splitUnescaped(raw, `#`, `\`)
+	raws := splitUnescapedBytes(raw, []byte(`#`), []byte(`\`))
 	if len(raws) != 3 {
-		err = errors.New("Invalid Enhanced Guide value")
+		err = syntaxError("Enhanced Guide: bad syntax")
 		return
 	}
 
 	// object-class is the first of three (3)
 	// mandatory Enhanced Guide components.
-	oc := strings.TrimSpace(raws[0])
+	oc := bytes.TrimSpace(raws[0])
 	var res bool
 	if res, err = oID(oc); !res {
-		err = errors.New("Invalid object-class for Enhanced Guide: " + oc + "(" + err.Error() + ")")
+		err = syntaxError("Enhanced Guide: invalid object-class: ",
+			string(oc))
 		return
 	}
 	g.ObjectClass = oc
@@ -90,14 +91,15 @@ func marshalEnhancedGuide(x any) (g EnhancedGuide, err error) {
 	cp := newCriteriaParser(raws[1])
 	g.Criteria = cp.tokenizeCriteria()
 	if err = g.Criteria.Valid(); err != nil {
-		err = errors.New("Invalid Criteria for Enhanced Guide: " + err.Error() + " -- " + raws[1])
+		err = syntaxError("Enhanced Guide: invalid Criteria: ",
+			err.Error(), " -- ", string(raws[1]))
 		return
 	}
 
 	// subset is the last of three (3)
 	// mandatory Enhanced Guide components.
 	if g.Subset = subsetToInt(raws[2]); g.Subset == -1 {
-		err = errors.New("Incompatible subset for Enhanced Guide: " + raws[2])
+		err = syntaxError("Enhanced Guide: incompatible subset: ", string(raws[2]))
 	}
 
 	return
@@ -108,7 +110,7 @@ String returns the string representation of the receiver instance.
 */
 func (r EnhancedGuide) String() (s string) {
 	if &r != nil {
-		s = r.ObjectClass + `#` +
+		s = string(r.ObjectClass) + `#` +
 			r.Criteria.String() + `#` +
 			intToSubset(r.Subset)
 	}
@@ -116,9 +118,9 @@ func (r EnhancedGuide) String() (s string) {
 	return
 }
 
-func subsetToInt(x string) (i int) {
+func subsetToInt(x []byte) (i int) {
 	i = -1
-	switch strings.ToLower(strings.TrimSpace(x)) {
+	switch string(lc(bytes.TrimSpace(x))) {
 	case `baseobject`:
 		i = 0
 	case `onelevel`:
@@ -168,7 +170,7 @@ From [§ 3.3.14 of RFC 4517]:
 [§ 3.3.14 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.14
 */
 type Guide struct {
-	ObjectClass string   `asn1:"tag:0,optional"`
+	ObjectClass []byte   `asn1:"tag:0,optional"`
 	Criteria    Criteria `asn1:"tag:1"`
 }
 
@@ -186,12 +188,12 @@ func guide(x any) (result bool, err error) {
 }
 
 func marshalGuide(x any) (g Guide, err error) {
-	var raw string
-	if raw, err = assertString(x, 5, "Guide"); err != nil {
+	var raw []byte
+	if raw, err = assertBytes(x, 5, "Guide"); err != nil {
 		return
 	}
 
-	raws := splitUnescaped(raw, `#`, `\`)
+	raws := splitUnescapedBytes(raw, []byte(`#`), []byte(`\`))
 
 	switch l := len(raws); l {
 	case 1:
@@ -201,7 +203,7 @@ func marshalGuide(x any) (g Guide, err error) {
 	case 2:
 		// Assume two (2) components represent the
 		// object-class and criteria respectively.
-		oc := strings.TrimSpace(raws[0])
+		oc := bytes.TrimSpace(raws[0])
 		var res bool
 		if res, err = oID(oc); res {
 			g.ObjectClass = oc
@@ -209,7 +211,7 @@ func marshalGuide(x any) (g Guide, err error) {
 			g.Criteria = cp.tokenizeCriteria()
 		}
 	default:
-		err = errors.New("Unexpected component length for Guide; want 2, got " +
+		err = syntaxError("Guide: unexpected component length; want 2, got ",
 			strconv.FormatInt(int64(l), 10))
 	}
 
@@ -225,8 +227,8 @@ String returns the string representation of the receiver instance.
 */
 func (r Guide) String() (s string) {
 	if &r != nil {
-		if r.ObjectClass != "" {
-			s += r.ObjectClass + `#`
+		if r.ObjectClass != nil {
+			s += string(r.ObjectClass) + `#`
 		}
 		s += r.Criteria.String()
 	}
@@ -250,12 +252,20 @@ Valid returns an error following an analysis of the receiver instance.
 */
 func (r AttributeMatchTerm) Valid() (err error) {
 	if _, err = oID(r.AttributeType); err != nil {
-		err = errors.New("Invalid attributeType for attributeMatchTerm: " + err.Error())
-	} else if !strInSlice(strings.ToUpper(r.MatchType), []string{"EQ", "SUBSTR", "LE", "GE", "APPROX"}) {
-		err = errors.New("Invalid matchType for attributeMatchTerm")
+		err = syntaxError("Invalid attributeType for attributeMatchTerm: ", err.Error())
+	} else if _, found := matchTerms[string(bytes.ToUpper(r.MatchType))]; !found {
+		err = syntaxError("Invalid matchType for attributeMatchTerm")
 	}
 
 	return
+}
+
+var matchTerms = map[string]struct{}{
+	"EQ":     {},
+	"LE":     {},
+	"GE":     {},
+	"APPROX": {},
+	"SUBSTR": {},
 }
 
 /*
@@ -271,7 +281,7 @@ Valid returns an error following an analysis of the receiver instance.
 */
 func (r Criteria) Valid() (err error) {
 	if len(r.Set) == 0 {
-		err = errors.New("Empty criteria")
+		err = syntaxError("Empty criteria")
 	} else {
 		for i := 0; i < len(r.Set) && err == nil; i++ {
 			err = r.Set[i].Valid()
@@ -293,7 +303,7 @@ Valid returns an error following an analysis of the receiver instance.
 */
 func (r NotTerm) Valid() (err error) {
 	if r.Term == nil {
-		err = errors.New("NotTerm: nil instance")
+		err = syntaxError("NotTerm: nil instance")
 	} else {
 		err = r.Term.Valid()
 	}
@@ -328,15 +338,15 @@ TODO - correct this.
 	        ... }
 */
 type AttributeMatchTerm struct {
-	AttributeType string
-	MatchType     string
+	AttributeType []byte
+	MatchType     []byte
 }
 
 /*
 String returns the string representation of the receiver instance.
 */
 func (r AttributeMatchTerm) String() string {
-	return r.AttributeType + "$" + r.MatchType
+	return string(r.AttributeType) + "$" + string(r.MatchType)
 }
 
 /*
@@ -436,7 +446,7 @@ Valid returns an error following an analysis of the receiver instance.
 */
 func (r AndTerm) Valid() (err error) {
 	if len(r.Set) == 0 {
-		err = errors.New("Empty AndTerm value")
+		err = syntaxError("Empty AndTerm value")
 	} else {
 		for i := 0; i < len(r.Set) && err == nil; i++ {
 			err = r.Set[i].Valid()
@@ -488,12 +498,12 @@ IsZero returns a Boolean value indicative of a nil receiver state.
 func (r AndTerm) IsZero() bool { return &r == nil }
 
 type criteriaParser struct {
-	input string
+	input []byte
 	pos   int
 }
 
-func newCriteriaParser(input string) *criteriaParser {
-	return &criteriaParser{input: strings.TrimSpace(input), pos: 0}
+func newCriteriaParser(input []byte) *criteriaParser {
+	return &criteriaParser{input: bytes.TrimSpace(input), pos: 0}
 }
 
 func (t *criteriaParser) next() byte {
@@ -545,10 +555,10 @@ func (t *criteriaParser) tokenizeTerm() Term {
 		return criteria
 	case '?':
 		t.next()
-		if strings.HasPrefix(t.input[t.pos:], "true") {
+		if bHasPfx(t.input[t.pos:], []byte("true")) {
 			t.pos += 4
 			return BoolTerm{bool: true}
-		} else if strings.HasPrefix(t.input[t.pos:], "false") {
+		} else if bHasPfx(t.input[t.pos:], []byte("false")) {
 			t.pos += 5
 			return BoolTerm{bool: false}
 		}
@@ -563,7 +573,7 @@ func (t *criteriaParser) tokenizeTerm() Term {
 	}
 }
 
-func (t *criteriaParser) tokenizeUntil(delims ...byte) string {
+func (t *criteriaParser) tokenizeUntil(delims ...byte) []byte {
 	start := t.pos
 	for {
 		if t.pos >= len(t.input) {
@@ -580,32 +590,32 @@ func (t *criteriaParser) tokenizeUntil(delims ...byte) string {
 	return t.input[start:t.pos]
 }
 
-func (t *criteriaParser) tokenizeMatchType() (s string) {
+func (t *criteriaParser) tokenizeMatchType() (s []byte) {
 	switch t.peek() {
 	case 'E':
-		if strings.HasPrefix(t.input[t.pos:], "EQ") {
+		if bHasPfx(t.input[t.pos:], []byte("EQ")) {
 			t.pos += 2
-			s = "EQ"
+			s = []byte("EQ")
 		}
 	case 'S':
-		if strings.HasPrefix(t.input[t.pos:], "SUBSTR") {
+		if bHasPfx(t.input[t.pos:], []byte("SUBSTR")) {
 			t.pos += 6
-			s = "SUBSTR"
+			s = []byte("SUBSTR")
 		}
 	case 'G':
-		if strings.HasPrefix(t.input[t.pos:], "GE") {
+		if bHasPfx(t.input[t.pos:], []byte("GE")) {
 			t.pos += 2
-			s = "GE"
+			s = []byte("GE")
 		}
 	case 'L':
-		if strings.HasPrefix(t.input[t.pos:], "LE") {
+		if bHasPfx(t.input[t.pos:], []byte("LE")) {
 			t.pos += 2
-			s = "LE"
+			s = []byte("LE")
 		}
 	case 'A':
-		if strings.HasPrefix(t.input[t.pos:], "APPROX") {
+		if bHasPfx(t.input[t.pos:], []byte("APPROX")) {
 			t.pos += 6
-			s = "APPROX"
+			s = []byte("APPROX")
 		}
 	}
 

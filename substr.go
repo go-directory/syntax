@@ -5,9 +5,9 @@ substr.go implements the substring assertion type.
 */
 
 import (
-	"errors"
-	"strings"
+	"bytes"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -83,17 +83,17 @@ func (r SubstringAssertion) String() (s string) {
 	}
 
 	if !r.IsZero() {
-		bld := &strings.Builder{}
+		bld := &bytes.Buffer{}
 
 		if len(r.Initial) > 0 {
-			bld.WriteString(r.Initial.String())
+			bld.Write(r.Initial)
 			bld.WriteString(Any())
 			if len(r.Final) > 0 {
-				bld.WriteString(r.Final.String())
+				bld.Write(r.Final)
 			}
 		} else if len(r.Final) > 0 {
 			bld.WriteString(Any())
-			bld.WriteString(r.Final.String())
+			bld.Write(r.Final)
 		} else {
 			// If a star is the only value,
 			// don't save anything.
@@ -121,19 +121,37 @@ func substringAssertion(x any) (result bool, err error) {
 }
 
 func marshalSubstringAssertion(z any) (ssa SubstringAssertion, err error) {
-	var x string
+	var x []byte
 	if x, err = assertSubstringAssertion(z); err != nil {
 		return
 	}
 
-	x = strings.TrimSpace(x)
-	f := strings.HasPrefix(x, `*`)
-	l := strings.HasSuffix(x, `*`)
-	if strings.Contains(x, `**`) {
-		err = errors.New("SubstringAssertion cannot contain consecutive asterisks")
+	x = bytes.TrimSpace(x)
+	if len(x) == 0 {
+		err = errMinAster
 		return
-	} else if !strings.Contains(x, `*`) {
-		err = errors.New("SubstringAssertion requires at least one asterisk")
+	}
+
+	f := x[0] == '*'
+	l := x[len(x)-1] == '*'
+
+	hasStar := false
+	prevStar := false
+	for _, b := range x {
+		if b == '*' {
+			if prevStar {
+				err = syntaxError("SubstringAssertion cannot contain consecutive asterisks")
+				return
+			}
+			hasStar = true
+			prevStar = true
+		} else {
+			prevStar = false
+		}
+	}
+
+	if !hasStar {
+		err = errMinAster
 		return
 	}
 
@@ -146,87 +164,209 @@ func marshalSubstringAssertion(z any) (ssa SubstringAssertion, err error) {
 	} else if !f && l {
 		// Initial + Any
 		ssa.Initial, ssa.Any, err = substrProcess3(x)
-	} else if !f && !l {
+	} else {
+		// Initial + Any + Final
 		ssa.Initial, ssa.Any, ssa.Final, err = substrProcess4(x)
 	}
 
 	return
 }
 
-func substrProcess1(x string) (a AssertionValue, err error) {
+func substrProcess1(x []byte) (a AssertionValue, err error) {
+	if len(x) < 2 {
+		err = errMinAster
+		return
+	}
+
 	z := x[1 : len(x)-1]
-	sp := strings.Split(z, `*`)
-	asp := strings.Join(sp, ``)
-	if err = assertionValueRunes(asp); err == nil {
+
+	var buf []byte
+	start := 0
+
+	for idx := 0; idx < len(z); idx++ {
+		if z[idx] == '*' {
+			if start < idx {
+				buf = append(buf, z[start:idx]...)
+			}
+			start = idx + 1
+		}
+	}
+
+	if start < len(z) {
+		buf = append(buf, z[start:]...)
+	}
+
+	if err = assertionValueBytes(buf); err == nil {
 		a = AssertionValue(z)
 	}
 
 	return
 }
 
-func substrProcess2(x string) (a, f AssertionValue, err error) {
+func substrProcess2(x []byte) (a, f AssertionValue, err error) {
+	if len(x) < 2 {
+		err = errMinAster
+		return
+	}
+
 	z := x[1:]
-	sp := strings.Split(z, `*`)
-	for idx := 0; idx < len(sp) && err == nil; idx++ {
-		err = assertionValueRunes(sp[idx])
+	var parts [][]byte
+	start := 0
+
+	for i := 0; i < len(z); i++ {
+		if z[i] == '*' {
+			seg := z[start:i]
+			if len(seg) > 0 {
+				if err = assertionValueBytes(seg); err != nil {
+					return
+				}
+				parts = append(parts, seg)
+				start = i + 1
+			}
+		}
 	}
 
-	if len(sp) == 1 {
-		f = AssertionValue(sp[len(sp)-1])
+	if start < len(z) {
+		seg := z[start:]
+		if err = assertionValueBytes(seg); err != nil {
+			return
+		}
+		parts = append(parts, seg)
+	}
+
+	if len(parts) == 0 {
+		err = errMinAster
+		return
+	}
+
+	if len(parts) == 1 {
+		f = AssertionValue(parts[0])
 	} else {
-		a = AssertionValue(strings.Join(sp[:len(sp)-1], `*`))
-		f = AssertionValue(sp[len(sp)-1])
+		var buf bytes.Buffer
+		for i := 0; i < len(parts)-1; i++ {
+			if i > 0 {
+				buf.WriteByte('*')
+			}
+			buf.Write(parts[i])
+		}
+		a = AssertionValue(buf.Bytes())
+		f = AssertionValue(parts[len(parts)-1])
 	}
 
 	return
 }
 
-func substrProcess3(x string) (i, a AssertionValue, err error) {
+func substrProcess3(x []byte) (i, a AssertionValue, err error) {
+	if len(x) < 2 {
+		err = errMinAster
+		return
+	}
+
 	z := x[:len(x)-1]
-	sp := strings.Split(z, `*`)
-	for idx := 0; idx < len(sp) && err == nil; idx++ {
-		err = assertionValueRunes(sp[idx])
+	var parts [][]byte
+	start := 0
+
+	for idx := 0; idx < len(z); idx++ {
+		if z[idx] == '*' {
+			seg := z[start:idx]
+			if len(seg) > 0 {
+				if err = assertionValueBytes(seg); err != nil {
+					return
+				}
+				parts = append(parts, seg)
+				start = idx + 1
+			}
+		}
 	}
 
-	if len(sp) == 1 {
-		i = AssertionValue(sp[0])
-	} else {
-		i = AssertionValue(sp[0])
-		a = AssertionValue(strings.Join(sp[1:], `*`))
+	if start < len(z) {
+		seg := z[start:]
+		if err = assertionValueBytes(seg); err != nil {
+			return
+		}
+		parts = append(parts, seg)
 	}
+
+	if len(parts) == 0 {
+		err = errMinAster
+		return
+	}
+
+	if len(parts) == 1 {
+		i = AssertionValue(parts[0])
+		return
+	}
+
+	i = AssertionValue(parts[0])
+
+	var buf bytes.Buffer
+	for idx := 1; idx < len(parts); idx++ {
+		if idx > 1 {
+			buf.WriteByte('*')
+		}
+		buf.Write(parts[idx])
+	}
+	a = AssertionValue(buf.Bytes())
 
 	return
 }
 
-func substrProcess4(x string) (i, a, f AssertionValue, err error) {
-	sp := strings.Split(x, `*`)
-	for idx := 0; idx < len(sp) && err == nil; idx++ {
-		err = assertionValueRunes(sp[idx])
+func substrProcess4(x []byte) (i, a, f AssertionValue, err error) {
+	var parts [][]byte
+	start := 0
+
+	for idx := 0; idx < len(x); idx++ {
+		if x[idx] == '*' {
+			seg := x[start:idx]
+			if len(seg) > 0 {
+				if err = assertionValueBytes(seg); err != nil {
+					return
+				}
+				parts = append(parts, seg)
+				start = idx + 1
+			}
+		}
 	}
 
-	switch len(sp) {
+	if start < len(x) {
+		seg := x[start:]
+		if err = assertionValueBytes(seg); err != nil {
+			return
+		}
+		parts = append(parts, seg)
+	}
+
+	switch len(parts) {
 	case 0, 1:
-		err = errors.New("SubstringAssertion requires at least one asterisk")
+		err = errMinAster
 	case 2:
-		i = AssertionValue(sp[0])
-		f = AssertionValue(sp[1])
+		i = AssertionValue(parts[0])
+		f = AssertionValue(parts[1])
 	default:
-		i = AssertionValue(sp[0])
-		a = AssertionValue(strings.Join(sp[1:len(sp)-1], `*`))
-		f = AssertionValue(sp[len(sp)-1])
+		i = AssertionValue(parts[0])
+
+		var buf bytes.Buffer
+		for idx := 1; idx < len(parts)-1; idx++ {
+			if idx > 1 {
+				buf.WriteByte('*')
+			}
+			buf.Write(parts[idx])
+		}
+		a = AssertionValue(buf.Bytes())
+		f = AssertionValue(parts[len(parts)-1])
 	}
 
 	return
 }
 
-func assertSubstringAssertion(x any) (value string, err error) {
+func assertSubstringAssertion(x any) (value []byte, err error) {
 	switch tv := x.(type) {
 	case string:
-		value = tv
+		value = []byte(tv)
 	case []byte:
-		value = string(tv)
+		value = tv
 	case SubstringAssertion:
-		value = tv.String()
+		value = []byte(tv.String())
 	default:
 		err = errorBadType("SubstringAssertion")
 	}
@@ -251,7 +391,7 @@ func assertionValueRunes(x any, zok ...bool) (err error) {
 		return
 	}
 
-	_err := errors.New("Invalid assertionvalue characters")
+	_err := syntaxError("Invalid assertionvalue characters")
 	for i := 0; i < len(raw) && err == nil; i++ {
 		if raw[i] == '\\' {
 			// Check if there are at least
@@ -272,3 +412,95 @@ func assertionValueRunes(x any, zok ...bool) (err error) {
 
 	return
 }
+
+func assertionValueBytes(raw []byte) (err error) {
+	if len(raw) == 0 {
+		return syntaxError("Invalid assertionvalue characters")
+	}
+
+	for i := 0; i < len(raw); {
+		b := raw[i]
+
+		if b < 0x80 {
+			if b == '\\' {
+				if i+3 > len(raw) {
+					return badAssChar
+				}
+				if !isHex(rune(raw[i+1])) || !isHex(rune(raw[i+2])) {
+					return badAssChar
+				}
+				i += 3
+				continue
+			}
+			// ASCII in allowed ranges is fine; uTF8SubsetRange already excludes '*' and '\'
+			i++
+			continue
+		}
+
+		// UTF-8
+		r, size := utf8.DecodeRune(raw[i:])
+		if r == utf8.RuneError && size == 1 {
+			return badAssChar
+		}
+		if !unicode.Is(uTF8SubsetRange, r) {
+			return uTFMB(r)
+		}
+		i += size
+	}
+
+	return nil
+}
+
+/*
+AssertionValue implements an OCTET STRING value.
+*/
+type AssertionValue []byte
+
+/*
+Set assigns x to the receiver instance.
+*/
+func (r *AssertionValue) Set(x any) {
+	var s string
+	switch tv := x.(type) {
+	case string:
+		s = tv
+	case []byte:
+		s = string(tv)
+	default:
+		return
+	}
+
+	*r = AssertionValue(escapeString(s))
+}
+
+/*
+String returns the string representation of the receiver instance.
+Note that this method is an alias of [AssertionValue.Escaped].
+*/
+func (r AssertionValue) String() string {
+	return r.Escaped()
+}
+
+/*
+Unescaped returns the unescaped receiver value. For example, "ジェシー"
+is returned instead of "\e3\82\b8\e3\82\a7\e3\82\b7\e3\83\bc".
+*/
+func (r AssertionValue) Unescaped() string {
+	var u string
+	if len(r) > 0 {
+		u = hexDecode(string(r))
+	}
+
+	return u
+}
+
+func (r AssertionValue) Escaped() (esc string) {
+	if len(r) > 0 {
+		esc = escapeString(string(r))
+	}
+
+	return
+}
+
+var badAssChar = syntaxError("Invalid assertionvalue characters")
+var errMinAster = syntaxError("SubstringAssertion requires at least one asterisk")

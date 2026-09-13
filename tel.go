@@ -1,9 +1,8 @@
 package syntax
 
 import (
-	"errors"
+	"bytes"
 	"strconv"
-	"strings"
 	"unicode"
 )
 
@@ -57,23 +56,31 @@ type FacsimileTelephoneNumber struct {
 	G3FacsimileNonBasicParameters BitString       `asn1:"optional"`
 }
 
-func (r FacsimileTelephoneNumber) String() (ftn string) {
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r FacsimileTelephoneNumber) String() string {
+	var s string
 	if len(r.TelephoneNumber) == 0 {
-		return
+		return s
 	}
 
-	var prms []string
+	var prms [][]byte
 	for name, bit := range ftnPRM {
-		if r.isSet(bit) && !strInSlice(name, prms) {
-			prms = append(prms, name)
+		if r.isSet(bit) {
+			prms = append(prms, []byte(name))
 		}
 	}
 
-	if ftn = r.TelephoneNumber.String(); len(prms) > 0 {
-		ftn += `$` + strings.Join(prms, `$`)
+	if ftn := r.TelephoneNumber.String(); len(prms) > 0 {
+		buf := &bytes.Buffer{}
+		buf.WriteString(ftn)
+		buf.WriteRune('$')
+		buf.Write(bytes.Join(prms, []byte(`$`)))
+		s = buf.String()
 	}
 
-	return
+	return s
 }
 
 func (r FacsimileTelephoneNumber) isSet(bit uint) bool {
@@ -132,15 +139,22 @@ func facsimileTelephoneNumber(x any) (result bool, err error) {
 }
 
 func marshalFacsimileTelephoneNumber(x any) (ftn FacsimileTelephoneNumber, err error) {
-	var raw string
-	if raw, err = assertString(x, 1, "Facsimile Telephone Number"); err != nil {
+	var raw []byte
+
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+	case string:
+		raw = []byte(tv)
+	default:
+		err = errorBadType("Facsimile Telephone Number")
 		return
 	}
 
-	raws := splitUnescaped(raw, `$`, `\`)
+	raws := splitUnescapedBytes(raw, []byte(`$`), []byte(`\`))
 
 	if len(raws) <= 1 {
-		err = errors.New("Invalid Facsimile Telephone Number")
+		err = syntaxError("Invalid Facsimile Telephone Number")
 		return
 	} else if ftn.TelephoneNumber, err = marshalPrintableString(raws[0]); err != nil || len(raws) == 1 {
 		return
@@ -154,13 +168,13 @@ func marshalFacsimileTelephoneNumber(x any) (ftn FacsimileTelephoneNumber, err e
 	raws = raws[1:]
 
 	for _, slice := range raws {
-		bit, found := ftnPRM[slice]
+		bit, found := ftnPRM[string(slice)]
 		if !found {
-			err = errors.New("Unknown Facsimile Telephone Number PRM value: " + slice)
+			err = syntaxError("Unknown Facsimile Telephone Number PRM value: ", string(slice))
 			break
 		} else if ftn.isSet(bit) {
-			err = errors.New("Duplicate Facsimile Telephone Number PRM value: " +
-				slice + " at bit " + strconv.FormatInt(int64(bit), 10))
+			err = syntaxError("Duplicate Facsimile Telephone Number PRM value: ",
+				string(slice), " at bit ", strconv.FormatInt(int64(bit), 10))
 			break
 		}
 		ftn.set(bit)
@@ -182,9 +196,7 @@ type TelephoneNumber PrintableString
 /*
 String returns the string representation of the receiver instance.
 */
-func (r TelephoneNumber) String() string {
-	return `+` + string(r)
-}
+func (r TelephoneNumber) String() string { return `+` + string(r) }
 
 /*
 TelephoneNumber returns an instance of [TelephoneNumber] alongside an error
@@ -201,34 +213,42 @@ func telephoneNumber(x any) (result bool, err error) {
 }
 
 func marshalTelephoneNumber(x any) (tn TelephoneNumber, err error) {
-	var raw string
-	switch tv := x.(type) {
-	case string:
+	badLen := func(tv []byte) (err error) {
 		l := len(tv)
 		if !(1 <= l && l <= UBTelephoneNumber) {
 			err = errorBadLength("Telephone Number", l)
-			return
 		} else if tv[0] != '+' {
-			err = errors.New("Telephone Number has invalid prefix: " + string(tv[0]))
-			return
+			err = syntaxError("Telephone Number has invalid prefix: ", string(tv[0]))
 		}
-		raw = tv[1:]
+		return
+	}
+
+	var raw []byte
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+	case string:
+		raw = []byte(tv)
 	default:
 		err = errorBadType("Telephone Number")
 		return
 	}
 
-	// TODO: conform more closely to E.123.
-	for _, ch := range raw {
-		char := rune(ch)
-		if !unicode.In(char, digits, lAlphas, uAlphas, prsRange, telRange) {
-			err = errorBadType("Invalid Telephone Number character: " + string(char))
-			return
-		}
-	}
+	if err = badLen(raw); err == nil {
+		raw = raw[1:]
 
-	if _, err = marshalPrintableString(raw); err == nil {
-		tn = TelephoneNumber(raw)
+		// TODO: conform more closely to E.123.
+		for _, ch := range raw {
+			char := rune(ch)
+			if !unicode.In(char, digits, lAlphas, uAlphas, prsRange, telRange) {
+				err = errorBadType("Invalid Telephone Number character: " + string(char))
+				return
+			}
+		}
+
+		if _, err = marshalPrintableString(raw); err == nil {
+			tn = TelephoneNumber(raw)
+		}
 	}
 
 	return
@@ -257,7 +277,7 @@ From [§ 1.4 of RFC 4512]:
 [§ 3.2 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.2
 [§ 3.3.33 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.33
 */
-type TelexNumber [3]string
+type TelexNumber [3][]byte
 
 /*
 TelexNumber returns an error following an analysis of x in the context
@@ -274,32 +294,29 @@ func telexNumber(x any) (result bool, err error) {
 }
 
 func marshalTelexNumber(x any) (tn TelexNumber, err error) {
-	var raw string
-	if raw, err = assertString(x, 1, "Telex Number"); err != nil {
-		return
+	var raw []byte
+
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+	case string:
+		raw = []byte(tv)
+	default:
+		return tn, errorBadType("Telex Number")
 	}
 
-	raws := splitUnescaped(raw, `$`, `\`)
-	if len(raws) != 3 {
-		err = errors.New("Invalid Telex Number value")
-		return
+	parts := splitUnescapedBytes(raw, []byte("$"), []byte("\\"))
+
+	if len(parts) != 3 {
+		return tn, syntaxError("Invalid Telex Number value")
 	}
 
-	var _tn []string
-	var ct int
-	for _, slice := range raws {
-		if _, err = marshalPrintableString(slice); err == nil {
-			_tn = append(_tn, slice)
-			ct++
+	for i := 0; i < 3; i++ {
+		if _, err = marshalPrintableString(parts[i]); err != nil {
+			return tn, err
 		}
+		tn[i] = append([]byte(nil), parts[i]...)
 	}
-
-	if ct != 3 {
-		err = errors.New("Invalid Telex Number component count; expected 3")
-		return
-	}
-
-	tn = TelexNumber(_tn)
 
 	return
 }
@@ -307,12 +324,19 @@ func marshalTelexNumber(x any) (tn TelexNumber, err error) {
 /*
 String returns the string representation of the receiver instance.
 */
-func (r TelexNumber) String() (str string) {
-	if r[0] != "" && r[1] != "" && r[2] != "" {
-		str = r[0] + `$` + r[1] + `$` + r[2]
+func (r TelexNumber) String() string {
+	var s string
+	if r[0] != nil && r[1] != nil && r[2] != nil {
+		buf := &bytes.Buffer{}
+		buf.Write(r[0])
+		buf.WriteRune('$')
+		buf.Write(r[1])
+		buf.WriteRune('$')
+		buf.Write(r[2])
+		s = buf.String()
 	}
 
-	return
+	return s
 }
 
 /*
@@ -357,7 +381,7 @@ From [§ 1.4 of RFC 4512]:
 [§ 3.3.32 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.32
 */
 type TeletexTerminalIdentifier struct {
-	TeletexTerminal string                    `asn1:"printable"` // (SIZE(1..ub-teletex-terminal-id)),
+	TeletexTerminal []byte                    `asn1:"printable"` // (SIZE(1..ub-teletex-terminal-id)),
 	Parameters      TeletexNonBasicParameters `asn1:"set,optional"`
 }
 
@@ -374,35 +398,39 @@ type TeletexNonBasicParameters struct {
 	PrivateUse               OctetString   `asn1:"tag:4,optional"` // OCTET STRING OPTIONAL
 }
 
-func (r TeletexTerminalIdentifier) String() (s string) {
-	s = r.TeletexTerminal
-	if r.Parameters.string() != "" {
-		s += `$` + r.Parameters.string()
+func (r TeletexTerminalIdentifier) String() string {
+	var s string
+	buf := &bytes.Buffer{}
+	buf.Write(r.TeletexTerminal)
+	if bt := r.Parameters.bytes(); len(bt) > 0 {
+		buf.WriteRune('$')
+		buf.Write(bt)
 	}
-	return
+	s = buf.String()
+
+	return s
 }
 
-func (r TeletexNonBasicParameters) string() string {
-	var slice []string
+func (r TeletexNonBasicParameters) bytes() (nbp []byte) {
+	var slice [][]byte
 	if len(r.GraphicCharacterSets) > 0 {
-		slice = append(slice, string(r.GraphicCharacterSets))
+		slice = append(slice, []byte(r.GraphicCharacterSets))
 	}
 	if len(r.CtrlCharacterSets) > 0 {
-		slice = append(slice, string(r.CtrlCharacterSets))
+		slice = append(slice, []byte(r.CtrlCharacterSets))
 	}
 	if len(r.PageFormats) > 0 {
-		slice = append(slice, string(r.PageFormats))
+		slice = append(slice, []byte(r.PageFormats))
 	}
 	if len(r.MiscTerminalCapabilities) > 0 {
-		slice = append(slice, string(r.MiscTerminalCapabilities))
+		slice = append(slice, []byte(r.MiscTerminalCapabilities))
 	}
 	if len(r.PrivateUse) > 0 {
-		slice = append(slice, string(r.PrivateUse))
+		slice = append(slice, []byte(r.PrivateUse))
 	}
 
-	var nbp string
 	if len(slice) > 0 {
-		nbp = strings.Join(slice, `$`)
+		nbp = bytes.Join(slice, []byte(`$`))
 	}
 
 	return nbp
@@ -424,16 +452,22 @@ func teletexTerminalIdentifier(x any) (result bool, err error) {
 
 func marshalTeletexTerminalIdentifier(x any) (tti TeletexTerminalIdentifier, err error) {
 	var (
-		raw string
+		raw []byte
 		raws,
-		vals []string
+		vals [][]byte
 	)
 
-	if raw, err = assertString(x, 1, "Teletex Terminal Identifier"); err != nil {
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+	case string:
+		raw = []byte(tv)
+	default:
+		err = errorBadType("Teletex Terminal Identifier")
 		return
 	}
 
-	_raws := splitUnescaped(raw, `$`, `\`)
+	_raws := splitUnescapedBytes(raw, []byte(`$`), []byte(`\`))
 	if raws, vals, err = marshalTeletex(_raws[1:]); err != nil {
 		return
 	} else if _, err = marshalPrintableString(_raws[0]); err != nil {
@@ -444,12 +478,13 @@ func marshalTeletexTerminalIdentifier(x any) (tti TeletexTerminalIdentifier, err
 
 	var ct uint8
 	for idx, slice := range raws {
-		bit, found := ttxs[slice]
+		sl := string(slice)
+		bit, found := ttxs[sl]
 		if !found {
-			err = errors.New("Unknown Teletex Terminal Identifier TTXPRM value: " + slice)
+			err = syntaxError("Unknown Teletex Terminal Identifier TTXPRM value: ", sl)
 			break
 		} else if ct&bit > 0 {
-			err = errors.New("Duplicate Teletex Terminal Identifier TTXPRM value: " + slice)
+			err = syntaxError("Duplicate Teletex Terminal Identifier TTXPRM value: ", sl)
 			break
 		}
 		ct |= bit
@@ -457,7 +492,7 @@ func marshalTeletexTerminalIdentifier(x any) (tti TeletexTerminalIdentifier, err
 		if idx < len(vals) {
 			value := vals[idx]
 
-			switch slice {
+			switch sl {
 			case `graphic`:
 				tti.Parameters.GraphicCharacterSets = TeletexString(value)
 			case `control`:
@@ -475,47 +510,61 @@ func marshalTeletexTerminalIdentifier(x any) (tti TeletexTerminalIdentifier, err
 	return
 }
 
-func marshalTeletex(_raws []string) (raws, vals []string, err error) {
+func marshalTeletex(_raws [][]byte) (raws, vals [][]byte, err error) {
 	var cfound bool
 	for i := 0; i < len(_raws); i++ {
-		if idx := strings.IndexRune(_raws[i], ':'); idx != -1 {
+		if idx := bytes.IndexRune(_raws[i], ':'); idx != -1 {
 			cfound = true
 			raw := _raws[i][:idx]
 			aft := _raws[i][idx+1:]
 			raws = append(raws, raw)
 
+			ll := append(raw, []byte(`:`)...)
 			if len(aft) > 0 {
 				if err = teletexSuffixValue(aft); err != nil {
 					return
 				}
-				vals = append(vals, raw+`:`+aft)
+				ll = append(ll, aft...)
+				vals = append(vals, ll)
 			} else {
-				vals = append(vals, raw+`:`)
+				vals = append(vals, ll)
 			}
 		} else {
-			err = errors.New("Teletex Terminal Identifier missing ttx-value")
+			err = syntaxError("Teletex Terminal Identifier missing ttx-value")
 			return
 		}
 	}
 
 	if !(0 < len(raws) && len(raws) < UBTeletexTerminalID) {
-		err = errors.New("Missing Teletex Terminal Identifier value, or length out of bounds")
+		err = syntaxError("Missing Teletex Terminal Identifier value, or length out of bounds")
 	}
 
 	if !cfound {
-		err = errors.New("Teletex Terminal Identifier missing ':' token")
+		err = syntaxError("Teletex Terminal Identifier missing ':' token")
 	}
 
 	return
 }
 
 // RFC 4518 § 2.6.3
-func prepareTelephoneNumberAssertion(a, b any) (str1, str2 string, err error) {
-	if str1, err = assertString(a, 0, "numericString"); err != nil {
+func prepareTelephoneNumberAssertion(a, b any) (bts1, bts2 []byte, err error) {
+	switch tv := a.(type) {
+	case []byte:
+		bts1 = tv
+	case string:
+		bts1 = []byte(tv)
+	default:
+		err = errorBadType("NumericString")
 		return
 	}
 
-	if str2, err = assertString(b, 0, "numericString"); err != nil {
+	switch tv := b.(type) {
+	case []byte:
+		bts2 = tv
+	case string:
+		bts2 = []byte(tv)
+	default:
+		err = errorBadType("NumericString")
 		return
 	}
 
@@ -523,21 +572,21 @@ func prepareTelephoneNumberAssertion(a, b any) (str1, str2 string, err error) {
 		'\u002d', '\u058a', '\u2010', '\u2011',
 		'\u2212', '\ufe63', '\uff0d', '\u0020',
 	} {
-		str1 = strings.ReplaceAll(str1, string(roon), ``)
-		str2 = strings.ReplaceAll(str2, string(roon), ``)
+		bts1 = bytes.ReplaceAll(bts1, []byte(string(roon)), []byte(``))
+		bts2 = bytes.ReplaceAll(bts2, []byte(string(roon)), []byte(``))
 	}
 
 	return
 }
 
-func teletexSuffixValue(x string) (err error) {
+func teletexSuffixValue(x []byte) (err error) {
 	var last rune
 	for _, ch := range x {
 		if ch == '$' && last != '\\' {
-			err = errors.New("Unescaped '$' character found in TTID suffix")
+			err = syntaxError("Unescaped '$' character found in TTID suffix")
 			break
-		} else if !(unicode.Is(ttxRange, ch) || ch == '\\') {
-			err = errors.New("Incompatible char for UTF0 (in UTFMB): " + string(ch))
+		} else if !(unicode.Is(ttxRange, rune(ch)) || ch == '\\') {
+			err = syntaxError("Incompatible char for UTF0 (in UTFMB): ", string(ch))
 			break
 		}
 		last = rune(ch)
@@ -547,7 +596,7 @@ func teletexSuffixValue(x string) (err error) {
 }
 
 func telephoneNumberSubstringsMatch(a, b any) (result bool, err error) {
-	var str1, str2 string
+	var str1, str2 []byte
 	if str1, str2, err = prepareTelephoneNumberAssertion(a, b); err == nil {
 		result, err = caseIgnoreSubstringsMatch(str1, str2)
 	}
@@ -556,9 +605,9 @@ func telephoneNumberSubstringsMatch(a, b any) (result bool, err error) {
 }
 
 func telephoneNumberMatch(a, b any) (result bool, err error) {
-	var str1, str2 string
+	var str1, str2 []byte
 	if str1, str2, err = prepareTelephoneNumberAssertion(a, b); err == nil {
-		result = strings.EqualFold(str1, str2)
+		result = bytes.EqualFold(str1, str2)
 	}
 
 	return

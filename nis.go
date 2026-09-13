@@ -1,14 +1,13 @@
 package syntax
 
 import (
-	"errors"
 	"strings"
 )
 
 /*
 NetgroupTriple implements the NIS Netgroup Triple type.  Instances of
 this type are produced following a successful execution of the
-[RFC2307.NetgroupTriple] function.
+[NewNetgroupTriple] function.
 
 A zero instance of this type is equal to:
 
@@ -96,7 +95,7 @@ func NewNetgroupTriple(x any) (trip NetgroupTriple, err error) {
 	ngt := splitUnescaped(value, `,`, `\`)
 
 	if len(ngt) != 3 {
-		err = errors.New("NIS Netgroup Triple does not contain exactly three (3) keystring/hyphen/null values")
+		err = syntaxError("NIS Netgroup Triple does not contain exactly three (3) keystring/hyphen/null values")
 		return
 	}
 
@@ -117,7 +116,7 @@ func NewNetgroupTriple(x any) (trip NetgroupTriple, err error) {
 
 func validTripleEncap(raw string) (err error) {
 	if !(raw[0] == '(' && raw[len(raw)-1] == ')') {
-		err = errors.New("NIS Netgroup Triple encapsulation error")
+		err = syntaxError("NIS Netgroup Triple encapsulation error")
 	}
 
 	return
@@ -152,7 +151,7 @@ func (r *NetgroupTriple) setNetgroupTripleFieldByIndex(idx int, val any) {
 
 /*
 BootParameter implements the NIS BootParameter type.  Instances of this type
-are produced following a successful execution of the [RFC2307.BootParameter]
+are produced following a successful execution of the [NewBootParameter]
 function.
 
 From [§ 2.4 of RFC 2307]:
@@ -226,24 +225,24 @@ func NewBootParameter(x any) (bp BootParameter, err error) {
 	switch tv := x.(type) {
 	case string:
 		if len(tv) < 5 {
-			err = errors.New("Boot Parameter: insufficient length")
+			err = syntaxError("Boot Parameter: insufficient length")
 			return
 		}
 		raw = tv
 	default:
-		err = errors.New("Boot Parameter")
+		err = syntaxError("Boot Parameter")
 		return
 	}
 
 	idx := strings.IndexRune(raw, '=')
 	if idx == -1 {
-		err = errors.New("Missing '=' delimiter for NIS Boot Parameter")
+		err = syntaxError("Missing '=' delimiter for NIS Boot Parameter")
 		return
 	}
 
 	idx2 := strings.IndexRune(raw, ':')
 	if idx2 == -1 {
-		err = errors.New("Missing ':' delimiter for NIS Boot Parameter")
+		err = syntaxError("Missing ':' delimiter for NIS Boot Parameter")
 		return
 	}
 
@@ -294,24 +293,4 @@ func isKeystring(x string) bool {
 
 func isXString(r rune) bool {
 	return isAlpha(r) || isDigit(r) || r == '-'
-}
-
-/*
-splitUnescaped returns an instance of []string based upon an attempt
-to split the input str value on separator characters which are NOT
-escaped. Escaped separator values are ignored.
-
-For example, this allows a string to be split on comma (,) while
-ignoring escaped commas (\,).
-*/
-func splitUnescaped(str, sep, esc string) (slice []string) {
-	slice = strings.Split(str, sep)
-	for i := len(slice) - 2; i >= 0; i-- {
-		if strings.HasSuffix(slice[i], esc) {
-			slice[i] = slice[i][:len(slice[i])-len(esc)] + sep + slice[i+1]
-			slice = append(slice[:i+1], slice[i+2:]...)
-		}
-	}
-
-	return
 }
