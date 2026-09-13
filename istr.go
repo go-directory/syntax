@@ -1,11 +1,8 @@
 package syntax
 
 import (
-	"errors"
-	"unicode"
+	"github.com/go-directory/encoding/asn1"
 )
-
-const TagIA5String byte = 0x16 // 22
 
 /*
 IA5String implements [§ 3.2 of RFC 4517]:
@@ -42,36 +39,33 @@ func iA5String(x any) (result bool, err error) {
 
 func marshalIA5String(x any) (ia5 IA5String, err error) {
 	var raw []byte
+
 	switch tv := x.(type) {
-	case string:
-		raw = []byte(tv)
 	case []byte:
 		raw = tv
 	case IA5String:
+		raw = []byte(tv)
+	case string:
 		raw = []byte(tv)
 	default:
 		err = errorBadType("IA5String")
 		return
 	}
 
-	if err = checkIA5String(raw); err == nil {
-		ia5 = IA5String(raw)
-	}
-
-	return
-}
-
-func checkIA5String[T textLike](raw T) (err error) {
 	if len(raw) == 0 {
-		err = errors.New("Invalid IA5 String (zero)")
+		err = syntaxError("Invalid IA5 String (zero)")
 		return
 	}
 
-	for i := 0; i < len(raw) && err == nil; i++ {
-		char := rune(raw[i])
-		if !unicode.Is(iA5Range, char) {
-			err = errors.New("Invalid IA5 String character: " + string(char))
+	for _, c := range raw {
+		if c > 0x7F {
+			err = syntaxError("Invalid IA5 String character")
+			break
 		}
+	}
+
+	if err == nil {
+		ia5 = IA5String(raw)
 	}
 
 	return
@@ -82,7 +76,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 IA5String value.
 */
 func (r IA5String) Encode() ([]byte, error) {
-	return encodePrimitive(TagIA5String, r)
+	return asn1.EncodePrimitive(asn1.TagIA5String, r)
 }
 
 /*
@@ -91,10 +85,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the IA5String tag (0x16).
 */
 func (r *IA5String) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != TagIA5String {
+	if len(enc) < 2 || enc[0] != asn1.TagIA5String {
 		return errIA5Decode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errIA5Decode
 	}
@@ -102,12 +96,4 @@ func (r *IA5String) Decode(enc []byte) error {
 	return nil
 }
 
-var errIA5Decode = errors.New("asn1: invalid IA5String")
-
-var iA5Range *unicode.RangeTable
-
-func init() {
-	iA5Range = &unicode.RangeTable{R16: []unicode.Range16{
-		{0x0000, 0x00FF, 1},
-	}}
-}
+var errIA5Decode = asn1Error("invalid IA5String encoding")

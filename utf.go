@@ -5,11 +5,12 @@ unicode.go handles rune analysis and unicode ranging.
 */
 
 import (
-	"errors"
 	"strconv"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -30,8 +31,6 @@ From [§ 1.4 of RFC 4512]:
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 */
 type UTF8String []byte
-
-const TagUTF8String byte = 0x0c // 12
 
 /*
 NewUTF8String returns an instance of [UTF8String] alongside an error
@@ -65,7 +64,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 UTF8String value.
 */
 func (r UTF8String) Encode() ([]byte, error) {
-	return encodePrimitive(TagUTF8String, r)
+	return asn1.EncodePrimitive(asn1.TagUTF8String, r)
 }
 
 /*
@@ -74,10 +73,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the UTF8String tag (0x0c).
 */
 func (r *UTF8String) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != TagUTF8String {
+	if len(enc) < 3 || enc[0] != asn1.TagUTF8String {
 		return errUTF8Decode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errUTF8Decode
 	}
@@ -85,7 +84,7 @@ func (r *UTF8String) Decode(enc []byte) error {
 	return nil
 }
 
-var errUTF8Decode = errors.New("asn1: invalid OCTET STRING")
+var errUTF8Decode = asn1Error("invalid OCTET STRING encoding")
 
 /*
 String returns the string representation of the receiver instance.
@@ -156,7 +155,7 @@ func IsSafeUTF8(x any) (result bool, err error) {
 			// ASCII range w/o double-quote
 			err = isSafeUTF1(string(r))
 			if '"' == r && last != '\u005C' {
-				err = errors.New("Unescaped double-quote; not a UTF8 Safe Character")
+				err = syntaxError("Unescaped double-quote; not a UTF8 Safe Character")
 			}
 			last = r
 		case 2, 3, 4:
@@ -173,7 +172,7 @@ func IsSafeUTF8(x any) (result bool, err error) {
 func isSafeUTF1(x string) (err error) {
 	z := rune([]byte(x)[0])
 	if !(unicode.Is(asciiRange, z) && z != '"') {
-		err = errors.New("Incompatible char for UTF0 (in ASCII Safe Range):" + x)
+		err = syntaxError("Incompatible char for UTF0 (in ASCII Safe Range):", x)
 	}
 
 	return
@@ -185,7 +184,7 @@ func isSafeUTF2(x string) (err error) {
 	ch2 := rune(z[1])
 	if !(unicode.Is(utf2aSafeRange, ch1) &&
 		unicode.Is(utf2bSafeRange, ch2)) {
-		err = errors.New("Incompatible chars for UTF2 (in UTF2 Safe Range): " + x)
+		err = syntaxError("Incompatible chars for UTF2 (in UTF2 Safe Range): ", x)
 	}
 
 	return
@@ -199,7 +198,7 @@ func isSafeUTF3(x string) (err error) {
 	if !(unicode.Is(utf3SafeRange, ch1) &&
 		unicode.Is(utf2bSafeRange, ch2) &&
 		unicode.Is(utf2bSafeRange, ch3)) {
-		err = errors.New("Incompatible chars for UTF3 (in UTF3 Safe Range): " + x)
+		err = syntaxError("Incompatible chars for UTF3 (in UTF3 Safe Range): ", x)
 	}
 
 	return
@@ -215,7 +214,7 @@ func isSafeUTF4(x string) (err error) {
 		unicode.Is(utf2bSafeRange, ch2) &&
 		unicode.Is(utf2bSafeRange, ch3) &&
 		unicode.Is(utf2bSafeRange, ch4)) {
-		err = errors.New("Incompatible chars for UTF4 (in UTF4 Safe Range): " + x)
+		err = syntaxError("Incompatible chars for UTF4 (in UTF4 Safe Range): ", x)
 	}
 
 	return
@@ -280,7 +279,7 @@ func uTFMB(x any) (err error) {
 			r := rune(raw[i])
 			var valid bool
 			if valid, err = isUTFMBChar(r); !valid {
-				err = errors.New("Invalid UTFMB char: " + string(r))
+				err = syntaxError("Invalid UTFMB char: ", string(r))
 				break
 			}
 		}
@@ -337,8 +336,8 @@ func isUTFMBChar(r rune) (b bool, err error) {
 	}
 
 	if !b {
-		err = errors.New("invalid leading byte for " +
-			strconv.Itoa(n) + "-byte sequence, or bad length")
+		err = syntaxError("invalid leading byte for ",
+			strconv.Itoa(n), "-byte sequence, or bad length")
 	}
 
 	return

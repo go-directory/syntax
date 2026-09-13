@@ -1,17 +1,19 @@
 package syntax
 
 import (
-	"errors"
 	"strconv"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
+/*
+Boolean implements the ASN.1 BOOLEAN type (tag 1).
+*/
 type Boolean bool
-
-const TagBoolean byte = 0x01
 
 /*
 NewBoolean returns a Boolean value alongside an error following
-an analysis of input argument x as a boolean.
+an analysis of input argument x as a bool.
 
 If x is a bool, it is guaranteed to be valid and is returned as-is.
 
@@ -33,12 +35,10 @@ func NewBoolean(x any) (b Boolean, err error) {
 		_b, err = strconv.ParseBool(tv)
 		b = Boolean(_b)
 	case byte:
-		if tv == 0x00 {
-			b = Boolean(false)
-		} else if tv == 0xFF {
-			b = Boolean(true)
+		if _b, found := boolMap[tv]; found {
+			b = Boolean(_b)
 		} else {
-			err = errors.New("Invalid bool byte; want 0x00 (false) or 0xFF (true)")
+			err = syntaxError("Invalid bool byte; want 0x00 (false) or 0xFF (true)")
 		}
 	default:
 		err = errorBadType("boolean")
@@ -61,7 +61,7 @@ func booleanMatch(realValue, assertionValue any) (result bool, err error) {
 	}
 
 	if err != nil {
-		err = errors.New("UNDEFINED: " + err.Error())
+		err = syntaxError("UNDEFINED: ", err.Error())
 	}
 
 	return
@@ -81,7 +81,7 @@ attempt to encode the receiver instance as an ASN.1 BOOLEAN value.
 */
 
 func (r Boolean) Encode() ([]byte, error) {
-	return encodePrimitive(TagBoolean, encodeBool(bool(r)))
+	return asn1.EncodePrimitive(asn1.TagBoolean, encodeBool(bool(r)))
 }
 
 /*
@@ -90,24 +90,27 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the BOOLEAN tag (0x01).
 */
 func (r *Boolean) Decode(enc []byte) error {
-	if len(enc) != 3 || enc[0] != TagBoolean {
+	if len(enc) != 3 || enc[0] != asn1.TagBoolean {
 		return errBoolDecode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errBoolDecode
 	}
 
-	b := enc[2]
 	var err error
-	if b == 0x00 {
-		*r = Boolean(false)
-	} else if b == 0xFF {
-		*r = Boolean(true)
+	if b, found := boolMap[enc[2]]; found {
+		*r = Boolean(b)
 	} else {
 		err = errBoolDecode
 	}
+
 	return err
 }
 
-var errBoolDecode = errors.New("asn1: invalid BOOLEAN")
+var boolMap = map[byte]bool{
+	0x00: false,
+	0xFF: true,
+}
+
+var errBoolDecode = asn1Error("invalid BOOLEAN encoding")

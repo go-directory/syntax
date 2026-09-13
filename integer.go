@@ -5,13 +5,12 @@ integer.go contains methods and types related to the ASN.1 INTEGER type.
 */
 
 import (
-	"errors"
 	"math"
 	"math/big"
 	"strconv"
-)
 
-const TagInteger byte = 0x02 // 2
+	"github.com/go-directory/encoding/asn1"
+)
 
 /*
 Integer implements the unbounded ASN.1 INTEGER type (tag 2).
@@ -147,18 +146,14 @@ func (r Integer) Encode() ([]byte, error) {
 		return nil, errIntCodec
 	}
 
+	var enc []byte
 	if r.big {
-		v := r.bigInt.Bytes()
-		if len(v) == 0 {
-			v = []byte{0x00}
-		} else if v[0]&0x80 != 0 {
-			v = append([]byte{0x00}, v...)
-		}
-		return encodePrimitive(TagInteger, v)
+		enc = asn1.EncodeInteger[*big.Int](r.bigInt)
+	} else {
+		enc = asn1.EncodeInteger[int64](r.native)
 	}
 
-	return encodePrimitive(TagInteger,
-		encodeIntegerValue(r.native))
+	return enc, nil
 }
 
 /*
@@ -167,27 +162,19 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the INTEGER tag (0x02).
 */
 func (r *Integer) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != TagInteger {
+	L := len(enc)
+	if L < 2 || enc[0] != asn1.TagInteger {
 		return errIntCodec
 	}
-	l, n := readLength(enc[1:])
-	if n == 0 || len(enc) < 1+n+l {
-		return errIntCodec
-	}
-	v := enc[1+n : 1+n+l]
 
-	if len(v) <= 8 {
-		r.native = decodeIntegerValue(v)
-		r.big = false
-		r.ok = true
-		return nil
+	var err error
+	if L > 10 {
+		r.bigInt, err = asn1.DecodeInteger[*big.Int](enc)
+	} else {
+		r.native, err = asn1.DecodeInteger[int64](enc)
 	}
 
-	bi := new(big.Int).SetBytes(v)
-	r.bigInt = bi
-	r.big = true
-	r.ok = true
-	return nil
+	return err
 }
 
 /*
@@ -489,10 +476,10 @@ func integerMatchingRule(a any, b any, operator ...byte) (result bool, err error
 }
 
 var (
-	errorIntNil     = errors.New("INTEGER: nil or bogus instance")
-	errorIntBadType = errors.New("INTEGER: unsupported input type")
-	errorIntNoInput = errors.New("INTEGER: nil or zero input")
-	errorIntOctal   = errors.New("INTEGER: leading zeroes (octal numbers) prohibited")
-	errorIntNaN     = errors.New("INTEGER: non numeric character found")
-	errIntCodec     = errors.New("INTEGER: invalid ASN.1 encoding")
+	errorIntNil     = syntaxError("INTEGER: nil or bogus instance")
+	errorIntBadType = syntaxError("INTEGER: unsupported input type")
+	errorIntNoInput = syntaxError("INTEGER: nil or zero input")
+	errorIntOctal   = syntaxError("INTEGER: leading zeroes (octal numbers) prohibited")
+	errorIntNaN     = syntaxError("INTEGER: non numeric character found")
+	errIntCodec     = syntaxError("INTEGER: invalid ASN.1 encoding")
 )

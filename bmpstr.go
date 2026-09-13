@@ -1,8 +1,9 @@
 package syntax
 
 import (
-	"errors"
 	"unicode/utf8"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -21,15 +22,13 @@ of payload P.
 */
 type BMPString []byte
 
-const TagBMPString byte = 0x1E // 30
-
 /*
 String returns the string representation of the receiver instance.
 
 This involves unmarshaling the receiver into a string return value.
 */
 func (r BMPString) String() string {
-	if len(r) < 3 || r[0] != TagBMPString {
+	if len(r) < 3 || r[0] != asn1.TagBMPString {
 		return ""
 	}
 
@@ -63,15 +62,15 @@ func (r BMPString) Encode() ([]byte, error) {
 	switch {
 	case chars < 128:
 		out = make([]byte, 2+len(r))
-		out[0] = TagBMPString
+		out[0] = asn1.TagBMPString
 		out[1] = byte(chars)
 		copy(out[2:], r)
 	default:
-		n := lengthBytes(chars)
+		n := asn1.LengthBytes(chars)
 		out = make([]byte, 1+1+n+len(r))
-		out[0] = TagBMPString
+		out[0] = asn1.TagBMPString
 		out[1] = 0x80 | byte(n)
-		writeLength(out[2:2+n], chars)
+		asn1.WritePrimitiveLength(out[2:2+n], chars)
 		copy(out[2+n:], r)
 	}
 
@@ -84,10 +83,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the BMPString tag (0x31).
 */
 func (r *BMPString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != TagBMPString {
+	if len(enc) < 2 || enc[0] != asn1.TagBMPString {
 		return errBMPCodec
 	}
-	chars, n := readLength(enc[1:])
+	chars, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 {
 		return errBMPCodec
 	}
@@ -100,7 +99,7 @@ func (r *BMPString) Decode(enc []byte) error {
 }
 
 var (
-	errBMPCodec = errors.New("asn1: invalid BMPString")
+	errBMPCodec = asn1Error("invalid BMPString encoding")
 )
 
 /*
@@ -125,18 +124,18 @@ func assertBMPString(x any) (enc BMPString, err error) {
 		e = []byte(tv)
 	case BMPString:
 		if L := len(tv); L == 2 {
-			if tv[0] != TagBMPString || tv[1] != 0x0 {
-				err = errors.New("Invalid ASN.1 tag or length octet for empty string")
+			if tv[0] != asn1.TagBMPString || tv[1] != 0x0 {
+				err = syntaxError("Invalid ASN.1 tag or length octet for empty string")
 				return
 			}
-			enc = BMPString{TagBMPString, 0x0}
+			enc = BMPString{asn1.TagBMPString, 0x0}
 			return
 		} else if L > 0 {
-			if tv[0] != TagBMPString {
-				err = errors.New("Invalid ASN.1 tag")
+			if tv[0] != asn1.TagBMPString {
+				err = syntaxError("Invalid ASN.1 tag")
 				return
 			} else if int(tv[1]) != len(tv[2:]) {
-				err = errors.New("input string encoded length does not match length octet")
+				err = syntaxError("input string encoded length does not match length octet")
 				return
 			}
 		}
@@ -147,12 +146,12 @@ func assertBMPString(x any) (enc BMPString, err error) {
 
 	if len(e) == 0 {
 		// Zero length values are OK
-		enc = BMPString{TagBMPString, 0x0}
+		enc = BMPString{asn1.TagBMPString, 0x0}
 		return
 	}
 
 	var result []byte
-	result = append(result, TagBMPString) // Add BMPString tag (byte(30))
+	result = append(result, asn1.TagBMPString) // Add BMPString tag (byte(30))
 
 	// UTF-8 to UTF-16BE
 	var utf16be []byte
@@ -162,7 +161,7 @@ func assertBMPString(x any) (enc BMPString, err error) {
 
 	chars := len(utf16be) / 2
 	if chars > 255 {
-		err = errors.New("input string too long for BMPString encoding")
+		err = syntaxError("input string too long for BMPString encoding")
 		return
 	}
 
@@ -180,11 +179,11 @@ func buildUTF16BE(e []byte) (utf16be []byte, err error) {
 	for i := 0; i < len(e); {
 		roon, sz := utf8.DecodeRune(e[i:])
 		if roon == utf8.RuneError && sz == 1 {
-			err = errors.New("invalid UTF-8 in BMPString")
+			err = syntaxError("invalid UTF-8 in BMPString")
 			return
 		}
 		if roon > 0xFFFF {
-			err = errors.New("BMPString cannot encode code points above U+FFFF")
+			err = syntaxError("BMPString cannot encode code points above U+FFFF")
 			return
 		}
 		utf16be = append(utf16be, byte(roon>>8), byte(roon))

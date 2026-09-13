@@ -1,9 +1,10 @@
 package syntax
 
 import (
-	"errors"
 	"strconv"
 	"strings"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -14,8 +15,6 @@ NumericString implements [§ 3.3.23 of RFC 4517]:
 [§ 3.3.23 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.23
 */
 type NumericString []byte
-
-const TagNumericString byte = 0x12 // 18
 
 /*
 String returns the string representation of the receiver instance.
@@ -46,7 +45,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 NumericString value.
 */
 func (r NumericString) Encode() ([]byte, error) {
-	return encodePrimitive(TagNumericString, r)
+	return asn1.EncodePrimitive(asn1.TagNumericString, r)
 }
 
 /*
@@ -55,10 +54,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the NumericString tag (0x12).
 */
 func (r *NumericString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != TagNumericString {
+	if len(enc) < 3 || enc[0] != asn1.TagNumericString {
 		return errNumericDecode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errNumericDecode
 	}
@@ -66,14 +65,14 @@ func (r *NumericString) Decode(enc []byte) error {
 	return nil
 }
 
-var errNumericDecode = errors.New("asn1: invalid NumericString")
+var errNumericDecode = asn1Error("invalid NumericString encoding")
 
 func marshalNumericString(x any) (ns NumericString, err error) {
 	var raw []byte
 	if raw, err = assertNumericString(x); err == nil {
 		for _, char := range raw {
 			if !(isDigit(rune(char)) || char == ' ') {
-				err = errors.New("Incompatible character for Numeric String: " + string(char))
+				err = syntaxError("Incompatible character for Numeric String: ", string(char))
 				break
 			}
 		}
@@ -96,7 +95,7 @@ func assertNumericString(x any) (raw []byte, err error) {
 	switch tv := x.(type) {
 	case int, int8, int16, int32, int64:
 		if isNegativeInteger(tv) {
-			err = errors.New("Incompatible sign (-) for Numeric String")
+			err = syntaxError("Incompatible sign (-) for Numeric String")
 			break
 		}
 		var cint int64

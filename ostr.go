@@ -5,12 +5,10 @@ ostr.go contains ASN.1 OCTET STRING types and methods.
 */
 
 import (
-	"errors"
 	"strconv"
-	"unicode"
-)
 
-const TagOctetString byte = 0x04
+	"github.com/go-directory/encoding/asn1"
+)
 
 /*
 OctetString implements [§ 3.3.25 of RFC 4517]:
@@ -61,10 +59,10 @@ func marshalOctetString(x any) (oct OctetString, err error) {
 
 	runes := []rune(string(raw))
 	for i := 0; i < len(runes) && err == nil; i++ {
-		var char rune = runes[i]
+		var c rune = runes[i]
 		// octet range is simply IA5 chars
-		if !unicode.In(char, iA5Range) {
-			err = errors.New("Incompatible Octet String character: " + strconv.Itoa(int(char)))
+		if c > 0x7F {
+			err = syntaxError("OCTET STRING: incompatible character: " + strconv.Itoa(int(c)))
 		}
 	}
 
@@ -176,7 +174,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 OCTET STRING value.
 */
 func (r OctetString) Encode() ([]byte, error) {
-	return encodePrimitive(TagOctetString, r)
+	return asn1.EncodePrimitive(asn1.TagOctetString, r)
 }
 
 /*
@@ -185,10 +183,11 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the OCTET STRING tag (0x04).
 */
 func (r *OctetString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != TagOctetString {
+	if len(enc) < 2 || enc[0] != asn1.TagOctetString {
 		return errOctetDecode
 	}
-	l, n := readLength(enc[1:])
+
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errOctetDecode
 	}
@@ -196,4 +195,4 @@ func (r *OctetString) Decode(enc []byte) error {
 	return nil
 }
 
-var errOctetDecode = errors.New("asn1: invalid OCTET STRING")
+var errOctetDecode = asn1Error("invalid OCTET STRING encoding")

@@ -3,12 +3,11 @@ package syntax
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"strconv"
 	"unicode/utf8"
-)
 
-const TagUniversalString byte = 0x1C // 28
+	"github.com/go-directory/encoding/asn1"
+)
 
 /*
 UniversalString implements the Universal Character Set.
@@ -47,7 +46,7 @@ func marshalUniversalString(x any) (us UniversalString, err error) {
 	}
 
 	if !utf8.Valid(raw) {
-		err = errors.New("invalid UniversalString: failed UTF8 checks")
+		err = syntaxError("invalid UniversalString: failed UTF8 checks")
 		return
 	}
 
@@ -69,7 +68,7 @@ func (r UniversalString) Encode() ([]byte, error) {
 	for i := 0; i < L; {
 		roon, sz := utf8.DecodeRune(r[i:])
 		if roon == utf8.RuneError && sz == 1 {
-			return nil, errors.New("UniversalString: invalid UTF-8")
+			return nil, syntaxError("UniversalString: invalid UTF-8")
 		}
 		if err := universalStringCharacterOutOfBounds(roon); err != nil {
 			return nil, err
@@ -79,13 +78,13 @@ func (r UniversalString) Encode() ([]byte, error) {
 		i += sz
 	}
 
-	return encodePrimitive(TagUniversalString, out[:pos])
+	return asn1.EncodePrimitive(asn1.TagUniversalString, out[:pos])
 }
 
 func universalStringCharacterOutOfBounds(r rune) (err error) {
 	if r > 0x10FFFF || (r >= 0xD800 && r <= 0xDFFF) {
-		err = errors.New("UNIVERSAL STRING: invalid code point " +
-			string(r) + " (" + strconv.Itoa(int(r)) + ")")
+		err = syntaxError("UNIVERSAL STRING: invalid code point ",
+			string(r), " (", strconv.Itoa(int(r)), ")")
 	}
 
 	return
@@ -97,11 +96,11 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the UniversalString tag (0x1C).
 */
 func (r *UniversalString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != TagUniversalString {
+	if len(enc) < 3 || enc[0] != asn1.TagUniversalString {
 		return errUnivDecode
 	}
 
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errUnivDecode
 	}
@@ -133,7 +132,7 @@ func (r *UniversalString) Decode(enc []byte) error {
 	return nil
 }
 
-var errUnivDecode = errors.New("asn1: invalid UniversalString")
+var errUnivDecode = asn1Error("invalid UniversalString encoding")
 
 /*
 String returns the string representation of the receiver instance.

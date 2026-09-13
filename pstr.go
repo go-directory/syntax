@@ -1,11 +1,8 @@
 package syntax
 
 import (
-	"errors"
-	"unicode"
+	"github.com/go-directory/encoding/asn1"
 )
-
-const TagPrintableString byte = 0x13
 
 /*
 PrintableString implements [§ 3.3.29 of RFC 4517]:
@@ -44,9 +41,7 @@ type PrintableString []byte
 /*
 String returns the string representation of the receiver instance.
 */
-func (r PrintableString) String() string {
-	return string(r)
-}
+func (r PrintableString) String() string { return string(r) }
 
 /*
 IsZero returns a Boolean value indicative of a nil receiver state.
@@ -72,36 +67,44 @@ func marshalPrintableString(x any) (ps PrintableString, err error) {
 
 	badLen := func(l int) (err error) {
 		if l == 0 {
-			err = errorBadLength("Printable String", 0)
+			err = errorBadLength("Printable String", 1)
 		}
 		return
 	}
 
 	switch tv := x.(type) {
+	case []byte:
+		err = badLen(len(tv))
+		raw = tv
 	case PrintableString:
 		err = badLen(len(tv))
 		raw = []byte(tv)
 	case string:
 		err = badLen(len(tv))
 		raw = []byte(tv)
-	case []byte:
-		err = badLen(len(tv))
-		raw = tv
 	default:
 		err = errorBadType("Printable String")
 	}
 
-	for i := 0; i < len(raw) && err == nil; i++ {
-		char := rune(raw[i])
-		if !unicode.In(char, digits, lAlphas, uAlphas, prsRange) {
-			err = errorBadType("Invalid printable string character: " + string(char))
+	if err != nil {
+		return
+	}
+
+	for _, c := range raw {
+		switch {
+		case c >= 'A' && c <= 'Z':
+		case c >= 'a' && c <= 'z':
+		case c >= '0' && c <= '9':
+		case c == '\'', c == '(', c == ')', c == '+',
+			c == ',', c == '-', c == '.', c == '=',
+			c == '/', c == ':', c == '?', c == ' ':
+		default:
+			return ps, syntaxError("Invalid PrintableString character '",
+				string(c), "'")
 		}
 	}
 
-	if err == nil {
-		ps = PrintableString(raw)
-	}
-
+	ps = PrintableString(raw)
 	return
 }
 
@@ -111,7 +114,7 @@ attempt to encode the receiver instance as an ASN.1 PrintableString.
 value.
 */
 func (r PrintableString) Encode() ([]byte, error) {
-	return encodePrimitive(TagPrintableString, r)
+	return asn1.EncodePrimitive(asn1.TagPrintableString, r)
 }
 
 /*
@@ -120,10 +123,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the PrintableString tag (0x13).
 */
 func (r *PrintableString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != TagPrintableString {
+	if len(enc) < 2 || enc[0] != asn1.TagPrintableString {
 		return errPrintableDecode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errPrintableDecode
 	}
@@ -131,4 +134,4 @@ func (r *PrintableString) Decode(enc []byte) error {
 	return nil
 }
 
-var errPrintableDecode = errors.New("asn1: invalid PrintableString")
+var errPrintableDecode = asn1Error("invalid PrintableString encoding")
