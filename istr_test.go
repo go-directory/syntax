@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func BenchmarkIA5StringASN1(b *testing.B) {
+	o, _ := NewIA5String(`This is an IA5 string.`)
+	b.StopTimer()
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		enc, _ := o.Encode()
+		var dec IA5String
+		_ = dec.Decode(enc)
+	}
+}
+
 func ExampleIA5String_roundTripBER() {
 	ia5 := IA5String("Testing")
 	enc, err := ia5.Encode()
@@ -31,12 +44,6 @@ func TestIA5String(t *testing.T) {
 		t.Errorf("%s failed:\nwant: %s\ngot:  %s",
 			t.Name(), raw, got)
 	}
-
-	//var chars []rune = []rune{0xEA4F, 'こ','ん','に','ち','は','、','世','界','🌍'}
-	//if err := checkIA5String(string(chars)); err == nil {
-	//	t.Errorf("%s failed: expected error, got nil", t.Name())
-	//	return
-	//}
 }
 
 func TestIA5String_SubstringsMatch(t *testing.T) {
@@ -69,7 +76,7 @@ func TestIA5String_CaseMatch(t *testing.T) {
 func TestIA5String_codecov(t *testing.T) {
 	_, _ = iA5String("HELLO.")
 	_, _ = iA5String("jesse.coretta@icloud.com")
-	if err := checkIA5String([]byte(`jesse.coretta@icloud.com`)); err != nil {
+	if _, err := marshalIA5String([]byte(`jesse.coretta@icloud.com`)); err != nil {
 		t.Errorf("%s failed: %v", t.Name(), err)
 		return
 	}
