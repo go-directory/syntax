@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"errors"
-)
-
 /*
 CountryString implements [§ 3.3.4 of RFC 4517]:
 
@@ -73,8 +69,8 @@ func marshalCountryString(x any) (cs CountryString, err error) {
 
 	if err == nil {
 		if !isUAlpha(rune(raw[0])) || !isUAlpha(rune(raw[1])) {
-			err = errors.New("Incompatible characters for Country String: " +
-				string(raw[0]) + "/" + string(raw[0]))
+			err = syntaxError("CountryString: incompatible characters: ",
+				string(raw[0]), "/", string(raw[0]))
 			return
 		}
 		cs = CountryString(raw)
