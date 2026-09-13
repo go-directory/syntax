@@ -1,11 +1,250 @@
 package syntax
 
 import (
+	"bytes"
+	"encoding/hex"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
 type textLike interface{ ~string | ~[]byte }
+
+func beq(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func beqf(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		aa := a[i]
+		bb := b[i]
+		if aa >= 'A' && aa <= 'Z' {
+			aa += 'a' - 'A'
+		}
+		if bb >= 'A' && bb <= 'Z' {
+			bb += 'a' - 'A'
+		}
+		if aa != bb {
+			return false
+		}
+	}
+	return true
+}
+
+func lc(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		c := b[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		out[i] = c
+	}
+	return out
+}
+
+func bHasPfx(s, prefix []byte) bool {
+	if len(prefix) > len(s) {
+		return false
+	}
+	for i := range prefix {
+		if s[i] != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func bHasSfx(s, suffix []byte) bool {
+	if len(suffix) > len(s) {
+		return false
+	}
+	offset := len(s) - len(suffix)
+	for i := range suffix {
+		if s[offset+i] != suffix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func bytesIndex(s, substr []byte) int {
+	n := len(substr)
+	if n == 0 {
+		return 0
+	}
+	if n > len(s) {
+		return -1
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		match := true
+		for j := 0; j < n; j++ {
+			if s[i+j] != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func splitOnByte(s []byte, sep byte) [][]byte {
+	var out [][]byte
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	out = append(out, s[start:])
+	return out
+}
+
+func trimStars(b []byte) []byte {
+	start := 0
+	end := len(b)
+
+	for start < end && b[start] == '*' {
+		start++
+	}
+	for end > start && b[end-1] == '*' {
+		end--
+	}
+
+	return b[start:end]
+}
+
+func bRepAll(s, old, new []byte) []byte {
+	if len(old) == 0 {
+		return s
+	}
+	var out []byte
+	i := 0
+	for i <= len(s)-len(old) {
+		match := true
+		for j := 0; j < len(old); j++ {
+			if s[i+j] != old[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			out = append(out, new...)
+			i += len(old)
+		} else {
+			out = append(out, s[i])
+			i++
+		}
+	}
+	out = append(out, s[i:]...)
+	return out
+}
+
+func bytesCompare(a, b []byte) int {
+	min := len(a)
+	if len(b) < min {
+		min = len(b)
+	}
+	for i := 0; i < min; i++ {
+		if a[i] < b[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+	if len(a) < len(b) {
+		return -1
+	}
+	if len(a) > len(b) {
+		return 1
+	}
+	return 0
+}
+
+/*
+splitUnescaped returns an instance of []string based upon an attempt
+to split the input str value on separator characters which are NOT
+escaped. Escaped separator values are ignored.
+
+For example, this allows a string to be split on comma (,) while
+ignoring escaped commas (\,).
+*/
+func splitUnescaped(str, sep, esc string) (slice []string) {
+	slice = strings.Split(str, sep)
+	for i := len(slice) - 2; i >= 0; i-- {
+		if strings.HasSuffix(slice[i], esc) {
+			slice[i] = slice[i][:len(slice[i])-len(esc)] + sep + slice[i+1]
+			slice = append(slice[:i+1], slice[i+2:]...)
+		}
+	}
+
+	return
+}
+
+/*
+splitUnescaped returns an instance of [][]byte based upon an attempt
+to split the input str value on separator characters which are NOT
+escaped. Escaped separator values are ignored.
+
+For example, this allows a string to be split on comma (,) while
+ignoring escaped commas (\,).
+*/
+func splitUnescapedBytes(str, sep, esc []byte) [][]byte {
+	var out [][]byte
+	var buf bytes.Buffer
+
+	var s byte
+	var e byte
+
+	if len(sep) > 0 {
+		s = sep[0]
+	}
+	if len(esc) > 0 {
+		e = esc[0]
+	}
+
+	escaped := false
+
+	for _, b := range str {
+		if escaped {
+			buf.WriteByte(b)
+			escaped = false
+			continue
+		}
+
+		if b == e {
+			escaped = true
+			continue
+		}
+
+		if b == s {
+			out = append(out, append([]byte(nil), buf.Bytes()...))
+			buf.Reset()
+			continue
+		}
+
+		buf.WriteByte(b)
+	}
+
+	out = append(out, append([]byte(nil), buf.Bytes()...))
+	return out
+}
 
 /*
 assertFirstStructField is a private function used for
@@ -30,6 +269,28 @@ the presence of a struct type.
 func isStruct(x any) (is bool) {
 	if x != nil {
 		is = reflect.TypeOf(x).Kind() == reflect.Struct
+	}
+
+	return
+}
+
+func assertBytes(x any, minimum int, name string) (val []byte, err error) {
+	badLen := func(l int) (err error) {
+		if l < minimum && minimum != 0 {
+			err = errorBadLength(name, 0)
+		}
+		return
+	}
+
+	switch tv := x.(type) {
+	case []byte:
+		err = badLen(len(tv))
+		val = tv
+	case string:
+		err = badLen(len(tv))
+		val = []byte(tv)
+	default:
+		err = errorBadType(name)
 	}
 
 	return
@@ -107,6 +368,57 @@ func castUint64(x any) (i uint64, err error) {
 	return
 }
 
+func escapeString(x string) (esc string) {
+	if len(x) > 0 {
+		bld := &strings.Builder{}
+		for _, z := range x {
+			if z > maxASCII {
+				for _, c := range []byte(string(z)) {
+					bld.WriteString(`\`)
+					bld.WriteString(strconv.FormatUint(uint64(c), 16))
+				}
+			} else {
+				bld.WriteRune(z)
+			}
+		}
+
+		esc = bld.String()
+	}
+
+	return
+}
+
+func hexDecode(x any) string {
+	var r string
+	switch tv := x.(type) {
+	case string:
+		r = tv
+	case []byte:
+		r = string(tv)
+	default:
+		return ``
+	}
+
+	d := &strings.Builder{}
+	length := len(r)
+
+	for i := 0; i < length; i++ {
+		if r[i] == '\\' && i+3 <= length {
+			b, err := hex.DecodeString(r[i+1 : i+3])
+			if err != nil || !(isHex(rune(r[i+1])) || isHex(rune(r[i+2]))) {
+				return ``
+			}
+			d.Write(b)
+			i += 2
+		} else {
+			d.WriteString(string(r[i]))
+		}
+	}
+
+	return d.String()
+}
+
+// TODO: kill me
 func strInSlice(r any, slice []string, cEM ...bool) (match bool) {
 	// assume caseIgnoreMatch by default
 	funk := strings.EqualFold
@@ -133,67 +445,4 @@ func strInSlice(r any, slice []string, cEM ...bool) (match bool) {
 	}
 
 	return
-}
-
-/*
-ber encoder for OctetString, PrintableString, et al.
-*/
-func encodePrimitive(tag byte, v []byte) ([]byte, error) {
-	l := len(v)
-	var out []byte
-
-	switch {
-	case l < 128:
-		out = make([]byte, 2+l)
-		out[0] = tag
-		out[1] = byte(l)
-		copy(out[2:], v)
-	default:
-		n := lengthBytes(l)
-		out = make([]byte, 1+1+n+l)
-		out[0] = tag
-		out[1] = 0x80 | byte(n)
-		writeLength(out[2:2+n], l)
-		copy(out[2+n:], v)
-	}
-
-	return out, nil
-}
-
-func lengthBytes(l int) int {
-	switch {
-	case l < 256:
-		return 1
-	case l < 65536:
-		return 2
-	case l < 16777216:
-		return 3
-	default:
-		return 4
-	}
-}
-
-func writeLength(dst []byte, l int) {
-	for i := len(dst) - 1; i >= 0; i-- {
-		dst[i] = byte(l)
-		l >>= 8
-	}
-}
-
-func readLength(b []byte) (int, int) {
-	if len(b) == 0 {
-		return 0, 0
-	}
-	if b[0] < 128 {
-		return int(b[0]), 1
-	}
-	n := int(b[0] & 0x7F)
-	if len(b) < 1+n {
-		return 0, 0
-	}
-	l := 0
-	for i := 0; i < n; i++ {
-		l = (l << 8) | int(b[1+i])
-	}
-	return l, 1 + n
 }
