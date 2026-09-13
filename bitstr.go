@@ -5,7 +5,6 @@ bitstring.go implements the ASN.1 BIT STRING type and methods.
 */
 
 import (
-	"errors"
 	"strconv"
 )
 
@@ -115,7 +114,7 @@ func verifyBitStringContents(raw []byte) ([]byte, error) {
 
 	// Last char MUST be 'B' rune, else die.
 	if term := raw[len(raw)-1]; term != 'B' {
-		err = errors.New("Incompatible terminating character for BitString: " + string(term))
+		err = syntaxError("Incompatible terminating character for BitString: ", string(term))
 		return raw, err
 	}
 
@@ -125,7 +124,7 @@ func verifyBitStringContents(raw []byte) ([]byte, error) {
 	// Make sure there are enough remaining
 	// characters to actually do something.
 	if len(raw) < 3 {
-		err = errors.New("Incompatible remaining length for BitString: " +
+		err = syntaxError("Incompatible remaining length for BitString: ",
 			strconv.FormatInt(int64(len(raw)), 10))
 		return raw, err
 	}
@@ -134,14 +133,14 @@ func verifyBitStringContents(raw []byte) ([]byte, error) {
 	L := raw[0]
 	R := raw[len(raw)-1]
 	if L != '\'' || R != '\'' {
-		err = errors.New("Incompatible encapsulating characters BitString: " + string(L) + "/" + string(R))
+		err = syntaxError("Incompatible encapsulating characters BitString: ", string(L), "/", string(R))
 		return raw, err
 	}
 	raw = raw[1 : len(raw)-1]
 
 	for i := 0; i < len(raw); i++ {
 		if !(rune(raw[i]) == '0' || rune(raw[i]) == '1') {
-			err = errors.New("Incompatible non-binary character for BitString" + string(raw[i]))
+			err = syntaxError("Incompatible non-binary character for BitString", string(raw[i]))
 			break
 		}
 	}
