@@ -6,11 +6,11 @@ import (
 
 func TestList(t *testing.T) {
 	result, err := caseIgnoreListMatch(
-		[]string{
-			`this`, `is`, `a`, `list`,
+		[][]byte{
+			[]byte(`this`), []byte(`is`), []byte(`a`), []byte(`list`),
 		},
-		[]string{
-			`this`, `is`, `a`, `list`,
+		[][]byte{
+			[]byte(`this`), []byte(`is`), []byte(`a`), []byte(`list`),
 		})
 
 	if err != nil {
@@ -21,11 +21,11 @@ func TestList(t *testing.T) {
 	}
 
 	result, err = caseIgnoreListMatch(
-		[]string{
-			`this`, `iz`, `a`, `list`,
+		[][]byte{
+			[]byte(`this`), []byte(`iz`), []byte(`a`), []byte(`list`),
 		},
-		[]string{
-			`this`, `is`, `a`, `list`,
+		[][]byte{
+			[]byte(`this`), []byte(`is`), []byte(`a`), []byte(`list`),
 		})
 
 	if err != nil {
