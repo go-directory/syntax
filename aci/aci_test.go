@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-directory/syntax/filter"
+	"github.com/go-directory/syntax"
 )
 
 func ExampleScope() {
@@ -1077,7 +1077,7 @@ func TestNetscape_codecov(t *testing.T) {
 	af.Valid()
 	af.aCIAttributeFilter.Attribute = Attribute{&aCIAttribute{slice: []string{"gecos"}}}
 	af.Valid()
-	af.aCIAttributeFilter.Filter, _ = filter.New("(objectClass=*")
+	af.aCIAttributeFilter.Filter, _ = syntax.NewFilter("(objectClass=*")
 	af.Valid()
 	af.parse("gecos:(&(objectClass=top)(employeeStatus=active))")
 	af.Keyword()

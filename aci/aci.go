@@ -15,7 +15,7 @@ import (
 	"unicode"
 
 	"github.com/go-directory/common"
-	"github.com/go-directory/syntax/filter"
+	"github.com/go-directory/syntax"
 )
 
 /*
@@ -2582,7 +2582,7 @@ func assertTargetValueByKeyword(tkw TargetKeyword, raw ...any) (value any, err e
 		}
 	case TargetFilter:
 		if len(raw) > 0 {
-			value, err = filter.New(raw[0])
+			value, err = syntax.NewFilter(raw[0])
 		}
 	case TargetScope:
 		value, err = marshalACIv3SearchScope(raw...)
@@ -6233,7 +6233,7 @@ aCIAttributeFilter is the embedded type (as a pointer!) within instances of Attr
 */
 type aCIAttributeFilter struct {
 	Attribute     // single LDAP AttributeType
-	filter.Filter // single LDAP Search Filter
+	syntax.Filter // single LDAP Search Filter
 }
 
 type AttributeFilterOperationItem struct {
@@ -6272,7 +6272,7 @@ type AttributeOperation uint8
 /*
 NewAttributeFilter initializes, optionally sets and returns a new instance of [AttributeFilter], which is a critical component of the [TargetAttrFilters] Target Rule.
 
-Input values must be either a [filter.Filter] or an [Attribute].
+Input values must be either a [syntax.Filter] or an [Attribute].
 */
 func NewAttributeFilter(x ...any) (AttributeFilter, error) {
 	var (
@@ -6298,10 +6298,10 @@ func NewAttributeFilter(x ...any) (AttributeFilter, error) {
 				af.aCIAttributeFilter.Attribute, err = marshalACIv3Attribute(tv)
 
 				switch tv2 := x[1].(type) {
-				case filter.Filter:
+				case syntax.Filter:
 					af.aCIAttributeFilter.Filter = tv2
 				case string:
-					af.aCIAttributeFilter.Filter, err = filter.New(tv2)
+					af.aCIAttributeFilter.Filter, err = syntax.NewFilter(tv2)
 				default:
 					err = badACIv3AFOpItemErr
 				}
@@ -6311,10 +6311,10 @@ func NewAttributeFilter(x ...any) (AttributeFilter, error) {
 				af.aCIAttributeFilter.Attribute = tv
 
 				switch tv2 := x[1].(type) {
-				case filter.Filter:
+				case syntax.Filter:
 					af.aCIAttributeFilter.Filter = tv2
 				case string:
-					af.aCIAttributeFilter.Filter, err = filter.New(tv2)
+					af.aCIAttributeFilter.Filter, err = syntax.NewFilter(tv2)
 				default:
 					err = badACIv3AFOpItemErr
 				}
@@ -6467,9 +6467,9 @@ func (r AttributeFilter) Attribute() Attribute {
 }
 
 /*
-Filter returns the underlying instance of [filter.Filter], or a bogus [filter.Filter] if unset.
+Filter returns the underlying instance of [syntax.Filter], or a bogus [syntax.Filter] if unset.
 */
-func (r AttributeFilter) Filter() filter.Filter {
+func (r AttributeFilter) Filter() syntax.Filter {
 	f := bogusFilter
 	if !r.IsZero() {
 		f = r.aCIAttributeFilter.Filter
@@ -6488,11 +6488,11 @@ func (r *aCIAttributeFilter) set(x ...any) {
 			if isAttribute(tv) {
 				r.Attribute, _ = marshalACIv3Attribute(tv)
 			} else {
-				r.Filter, _ = filter.New(tv)
+				r.Filter, _ = syntax.NewFilter(tv)
 			}
 		case Attribute:
 			r.Attribute = tv
-		case filter.Filter:
+		case syntax.Filter:
 			r.Filter = tv
 		}
 	}
@@ -6965,8 +6965,8 @@ func (r *AttributeFilter) parse(raw string) (err error) {
 		return
 	}
 
-	var f filter.Filter
-	if f, err = filter.New(raw[idx+1:]); err == nil {
+	var f syntax.Filter
+	if f, err = syntax.NewFilter(raw[idx+1:]); err == nil {
 		r.Set(at, f)
 	}
 
@@ -8115,7 +8115,7 @@ func getStringer(x any) (meth func() string) {
 	return
 }
 
-var bogusFilter filter.Filter
+var bogusFilter syntax.Filter
 
 var (
 	nilInstanceErr error = errors.New("Nil instance error")
@@ -8157,7 +8157,7 @@ var (
 )
 
 func init() {
-	bogusFilter, _ = filter.New(`bogus`)
+	bogusFilter, _ = syntax.NewFilter(`bogus`)
 
 	aCIRightsMap = map[Right]string{
 		NoAccess:        `none`,
