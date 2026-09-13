@@ -1,7 +1,6 @@
 package syntax
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/go-directory/dua"
@@ -48,7 +47,7 @@ func dN(x any) (ok bool, err error) {
 	switch tv := x.(type) {
 	case DistinguishedName:
 		if tv.DN == nil {
-			err = errors.New("Invalid *dua.DN instance")
+			err = syntaxError("Invalid *dua.DN instance")
 		}
 	case string:
 		_, err = dua.ParseDN(tv)
@@ -129,7 +128,8 @@ func marshalNameAndOptionalUID(x any) (nou NameAndOptionalUID, err error) {
 
 		_l = _l - len(bitstring) - 1
 		if delim := raw[_l]; delim != '#' {
-			err = errors.New("Missing '#' delimiter for Name/UID pair; found " + string(delim))
+			err = syntaxError("Missing '#' delimiter for Name/UID pair; found ",
+				string(delim))
 			return
 		}
 
@@ -151,7 +151,7 @@ func distinguishedNameMatch(a, b any) (result bool, err error) {
 		switch tv := a.(type) {
 		case DistinguishedName:
 			if tv.DN == nil {
-				err = errors.New("Nil *dua.DN")
+				err = syntaxError("Nil *dua.DN")
 				break
 			}
 			dn = tv
