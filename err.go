@@ -3,6 +3,8 @@ package syntax
 import (
 	"errors"
 	"strconv"
+
+	"github.com/go-directory/common"
 )
 
 func errorBadLength(name string, length int) error {
@@ -11,4 +13,22 @@ func errorBadLength(name string, length int) error {
 
 func errorBadType(name string) error {
 	return errors.New(`Incompatible input type for ` + name)
+}
+
+func syntaxError(msg ...string) error {
+	return common.LDAPResultInvalidAttributeSyntax.New(msg...)
+}
+
+func asn1Error(msg ...string) error {
+	m := append([]string{"ASN.1 "}, msg...)
+	return common.LDAPResultOther.New(m...)
+}
+
+func setDiag(err error, msg ...string) error {
+	if is, ok := err.(common.Error); ok {
+		is.SetDiag(msg...)
+		err = is
+	}
+
+	return err
 }
