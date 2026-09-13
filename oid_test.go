@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func BenchmarkObjectIdentifierASN1(b *testing.B) {
+	o, _ := NewObjectIdentifier(`1.3.6.1.4.1.56521.999`)
+	b.StopTimer()
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		enc, _ := o.Encode()
+		var dec ObjectIdentifier
+		_ = dec.Decode(enc)
+	}
+}
+
 func ExampleObjectIdentifier_roundTripBER() {
 	o, err := NewObjectIdentifier(`1.3.6.1.4.1`)
 	if err != nil {
