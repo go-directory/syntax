@@ -2,7 +2,6 @@ package syntax
 
 import (
 	"encoding/base64"
-	"errors"
 	"os"
 )
 
@@ -95,7 +94,7 @@ func marshalJPEG(x any) (err error) {
 
 	for idx, h := range header {
 		if h != rune(raw[idx]) {
-			err = errors.New("Incompatible character for JPEG header: " + string(h))
+			err = syntaxError("Incompatible character for JPEG header: ", string(h))
 			return
 		}
 	}
@@ -107,7 +106,7 @@ func marshalJPEG(x any) (err error) {
 
 	if rune(raw[len(raw)-2]) != footer[0] ||
 		rune(raw[len(raw)-1]) != footer[1] {
-		err = errors.New("Incompatible character for JPEG footer: " + string(raw[len(raw)-2:]))
+		err = syntaxError("Incompatible character for JPEG footer: ", string(raw[len(raw)-2:]))
 	}
 
 	return
