@@ -1,7 +1,7 @@
 package syntax
 
 import (
-	"errors"
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -47,14 +47,12 @@ func NewTeletexString(x any) (TeletexString, error) {
 	return marshalTeletexString(x)
 }
 
-const TagT61String byte = 0x14 // 20
-
 /*
 Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 T61String value.
 */
 func (r TeletexString) Encode() ([]byte, error) {
-	return encodePrimitive(TagT61String, r)
+	return asn1.EncodePrimitive(asn1.TagT61String, r)
 }
 
 /*
@@ -63,10 +61,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the T61String tag (0x14).
 */
 func (r *TeletexString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != TagT61String {
+	if len(enc) < 3 || enc[0] != asn1.TagT61String {
 		return errT61Decode
 	}
-	l, n := readLength(enc[1:])
+	l, n := asn1.ReadPrimitiveLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errT61Decode
 	}
@@ -74,7 +72,7 @@ func (r *TeletexString) Decode(enc []byte) error {
 	return nil
 }
 
-var errT61Decode = errors.New("asn1: invalid T.61 String")
+var errT61Decode = asn1Error("invalid T.61 String encoding")
 
 func teletexString(x any) (result bool) {
 	_, err := marshalTeletexString(x)
@@ -109,7 +107,7 @@ func marshalTeletexString(x any) (ts TeletexString, err error) {
 	for i := 0; i < len(raw) && err == nil; i++ {
 		char := rune(raw[i])
 		if !(isT61RangedRune(char) || isT61Single(char)) {
-			err = errors.New("Incompatible character for Teletex String: " + string(char))
+			err = syntaxError("Incompatible character for Teletex String: ", string(char))
 			break
 		}
 	}
