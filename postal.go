@@ -5,9 +5,9 @@ postal.go contains implementations for various postal and mail constructs.
 */
 
 import (
-	"errors"
-	"strings"
+	"bytes"
 	"unicode"
+	"unicode/utf8"
 )
 
 /*
@@ -25,13 +25,13 @@ From [§ 1.4 of RFC 4512]:
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 [§ 3.3.5 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.5
 */
-type DeliveryMethod []string
+type DeliveryMethod [][]byte
 
 /*
 String returns the string representation of the receiver instance.
 */
 func (r DeliveryMethod) String() string {
-	return strings.Join(r, ` $ `)
+	return string(bytes.Join(r, []byte(` $ `)))
 }
 
 func deliveryMethod(x any) (result bool, err error) {
@@ -48,31 +48,39 @@ func NewDeliveryMethod(x any) (DeliveryMethod, error) {
 	return marshalDeliveryMethod(x)
 }
 
+var postalDeliveryMethods = map[string]struct{}{
+	// Method	ASN.1 Type Integer [X.520]
+	`any`:       {}, // 0
+	`mhs`:       {}, // 1
+	`physical`:  {}, // 2
+	`telex`:     {}, // 3
+	`teletex`:   {}, // 4
+	`g3fax`:     {}, // 5
+	`g4fax`:     {}, // 6
+	`ia5`:       {}, // 7
+	`videotex`:  {}, // 8
+	`telephone`: {}, // 9
+}
+
 func marshalDeliveryMethod(x any) (dm DeliveryMethod, err error) {
-	postalDeliveryMethods := []string{
-		// Method	ASN.1 Type Integer [X.520]
-		`any`,       // 0
-		`mhs`,       // 1
-		`physical`,  // 2
-		`telex`,     // 3
-		`teletex`,   // 4
-		`g3fax`,     // 5
-		`g4fax`,     // 6
-		`ia5`,       // 7
-		`videotex`,  // 8
-		`telephone`, // 9
+	var raw []byte
+	var dms DeliveryMethod
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+	case string:
+		raw = []byte(tv)
+	default:
+		err = errorBadType("Delivery Method")
+		return
 	}
 
-	var raw string
-	var dms DeliveryMethod
-	if raw, err = assertString(x, 3, "Delivery Method"); err == nil {
-		raws := strings.Split(strings.ReplaceAll(raw, ` `, ``), `$`)
-		for i := 0; i < len(raws) && err == nil; i++ {
-			if !strInSlice(raws[i], postalDeliveryMethods) {
-				err = errors.New("Invalid PDM type for Delivery Method: " + raws[i])
-			} else {
-				dms = append(dms, raws[i])
-			}
+	raws := splitOnByte(bRepAll(raw, []byte(` `), []byte(``)), 0x24)
+	for i := 0; i < len(raws) && err == nil; i++ {
+		if _, found := postalDeliveryMethods[string(raws[i])]; !found {
+			err = syntaxError("Invalid PDM type for Delivery Method: ", string(raws[i]))
+		} else {
+			dms = append(dms, raws[i])
 		}
 	}
 
@@ -111,13 +119,13 @@ From [§ 1.4 of RFC 4512]:
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 [§ 3.3.28 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.28
 */
-type PostalAddress []string
+type PostalAddress [][]byte
 
 /*
 String returns the string representation of the receiver instance.
 */
 func (r PostalAddress) String() string {
-	return strings.Join(r, `$`)
+	return string(bytes.Join(r, []byte(`$`)))
 }
 
 func postalAddress(x any) (result bool, err error) {
@@ -135,10 +143,27 @@ func NewPostalAddress(x any) (PostalAddress, error) {
 }
 
 func marshalPostalAddress(x any) (pa PostalAddress, err error) {
-	var lcs []string
+	badLen := func(l int) (err error) {
+		if l < 1 {
+			err = errorBadLength("Postal Address", 1)
+		}
+		return
+	}
 
-	var raw string
-	if raw, err = assertString(x, 1, "line-char"); err == nil {
+	var raw []byte
+	switch tv := x.(type) {
+	case []byte:
+		raw = tv
+		err = badLen(len(tv))
+	case string:
+		raw = []byte(tv)
+		err = badLen(len(tv))
+	default:
+		err = errorBadType("Postal Address")
+	}
+
+	if err == nil {
+		var lcs [][]byte
 		if lcs, err = lineChar(raw); err == nil {
 			pa = PostalAddress(lcs)
 		}
@@ -183,7 +208,7 @@ From [§ 3.2 of RFC 4517]:
 [§ 3.2 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.2
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 */
-type OtherMailbox [2]string
+type OtherMailbox [2][]byte
 
 func otherMailbox(x any) (result bool, err error) {
 	_, err = marshalOtherMailbox(x)
@@ -199,90 +224,91 @@ func NewOtherMailbox(x any) (OtherMailbox, error) {
 	return marshalOtherMailbox(x)
 }
 
-func marshalOtherMailbox(x any) (om OtherMailbox, err error) {
-	var raw string
-	if raw, err = assertString(x, 1, "Other Mailbox"); err == nil {
-		raws := splitUnescaped(raw, `$`, `\`)
+func marshalOtherMailbox(x any) (om [2][]byte, err error) {
+	var raw []byte
 
-		if len(raws) != 2 {
-			err = errors.New("Invalid Other Mailbox value")
-			return
+	badLen := func(l int) (err error) {
+		if l < 1 {
+			err = errorBadLength("Other Mailbox", 1)
 		}
-
-		if _, err = marshalPrintableString(raws[0]); err == nil {
-			if _, err = marshalIA5String(raws[1]); err == nil {
-				om[0] = raws[0]
-				om[1] = raws[1]
-			}
-		}
-	}
-
-	return
-}
-
-func pSOrIA5s(x any) (psia5 []string, err error) {
-	sep := `$`
-	esc := `\`
-
-	var raw string
-	if raw, err = assertString(x, 1, "PrintableString OR IA5String"); err != nil {
 		return
 	}
 
-	raws := splitUnescaped(raw, sep, esc)
-	if _, err = marshalPrintableString(raws[0]); err != nil {
+	switch tv := x.(type) {
+	case []byte:
+		err = badLen(len(tv))
+		raw = tv
+	case string:
+		err = badLen(len(tv))
+		raw = []byte(tv)
+	default:
+		err = errorBadType("Other Mailbox")
+	}
+
+	if err != nil {
 		return
 	}
-	psia5 = append(psia5, raws[0])
 
-	for i := 1; i < len(raws) && err == nil; i++ {
-		if _, err = marshalPrintableString(raws[i]); err == nil {
-			psia5 = append(psia5, raws[i])
-		} else if err = checkIA5String(raws[i]); err == nil {
-			psia5 = append(psia5, raws[i])
-		}
+	parts := splitUnescapedBytes(raw, []byte(`$`), []byte(`\`))
+	if len(parts) != 2 {
+		err = syntaxError("Invalid Other Mailbox value")
+		return
 	}
 
+	if _, err = marshalPrintableString(parts[0]); err == nil {
+		if _, err = marshalIA5String(parts[1]); err == nil {
+			om[0] = append([]byte(nil), parts[0]...)
+			om[1] = append([]byte(nil), parts[1]...)
+		}
+	}
 	return
 }
 
-func lineChar(raw string) (lineChars []string, err error) {
+func lineChar(raw []byte) (lineChars [][]byte, err error) {
 	var last rune
-	value := &strings.Builder{}
-	for i := 0; i < len(raw) && err == nil; i++ {
-		r := rune(raw[i])
-		rL := runeLen(r)
-		if rL == 1 {
-			// UTF0
-			if r == '\\' {
-				last = r
-				continue
-			} else if r == '$' {
-				if last == r {
-					err = errors.New("Contiguous '$' runes; invalid line-char sequence")
-					break
-				} else if last == '\\' {
-					value.WriteString(string(last))
-					value.WriteString(string(r))
-					last = rune(0)
-				} else {
-					lineChars = append(lineChars, value.String())
-					value.Reset()
-					last = '$'
-				}
-				continue
-			}
+	value := &bytes.Buffer{}
 
-			last = r
-			if err = uTFMB(r); err == nil || unicode.Is(lineCharRange, r) {
-				value.WriteString(string(r))
-				err = nil
-			}
+	for i := 0; i < len(raw) && err == nil; {
+		r, size := utf8.DecodeRune(raw[i:])
+		if r == utf8.RuneError && size == 1 {
+			err = syntaxError("invalid UTF-8")
+			break
 		}
+
+		if r == '\\' {
+			last = r
+			i += size
+			continue
+		}
+
+		if r == '$' {
+			if last == r {
+				err = syntaxError("Contiguous '$' runes; invalid line-char sequence")
+				break
+			} else if last == '\\' {
+				value.WriteByte('\\')
+				value.WriteByte('$')
+				last = rune(0)
+			} else {
+				lineChars = append(lineChars, append([]byte(nil), value.Bytes()...))
+				value.Reset()
+				last = '$'
+			}
+			i += size
+			continue
+		}
+
+		last = r
+		if err = uTFMB(r); err == nil || unicode.Is(lineCharRange, r) {
+			value.Write(raw[i : i+size])
+			err = nil
+		}
+
+		i += size
 	}
 
 	if value.Len() > 0 && err == nil {
-		lineChars = append(lineChars, value.String())
+		lineChars = append(lineChars, append([]byte(nil), value.Bytes()...))
 	}
 
 	return
