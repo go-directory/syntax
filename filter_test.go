@@ -5,11 +5,257 @@ import (
 	"testing"
 )
 
+func ExampleFilterDecode() {
+	f, err := NewFilter(`(&(givenName=Jesse)(sn=Coretta)(!(sn=James)))`)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = f.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec Filter
+	if dec, err = FilterDecode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: (&(givenName=Jesse)(sn=Coretta)(!(sn=James)))
+}
+
+func ExampleFilterAnd_roundTripBER() {
+	f, err := NewFilter(`(&(givenName=Jesse)(sn=Coretta)(!(sn=James)))`)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = f.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterAnd
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: (&(givenName=Jesse)(sn=Coretta)(!(sn=James)))
+}
+
+func ExampleFilterSubstrings_roundTripBER() {
+	subs, _ := NewSubstrings(`substring*substring*substring`)
+
+	fs := FilterSubstrings{
+		Type:       []byte(`cn`),
+		Substrings: subs,
+	}
+
+	enc, err := fs.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterSubstrings
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (cn=substring*substring*substring)
+}
+
 func TestInvalidFilter_String(t *testing.T) {
 	f := invalidFilter{}
 	if f.String() != `` {
 		t.Errorf("%s failed: unable to print nil filter", t.Name())
 	}
+}
+
+func ExampleFilterPresent_roundTripBER() {
+	pr := FilterPresent{
+		Desc: []byte(`objectClass`),
+	}
+
+	enc, err := pr.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterPresent
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (objectClass=*)
+}
+
+func ExampleFilterGreaterOrEqual_roundTripBER() {
+	ge := FilterGreaterOrEqual{
+		Desc:  []byte(`someNumber`),
+		Value: []byte(`75`),
+	}
+
+	enc, err := ge.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterGreaterOrEqual
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (someNumber>=75)
+}
+
+func ExampleFilterLessOrEqual_roundTripBER() {
+	le := FilterLessOrEqual{
+		Desc:  []byte(`someNumber`),
+		Value: []byte(`75`),
+	}
+
+	enc, err := le.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterLessOrEqual
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (someNumber<=75)
+}
+
+func ExampleFilterApproximateMatch_roundTripBER() {
+	fam := FilterApproximateMatch{
+		Desc:  []byte(`givenName`),
+		Value: []byte(`Jesse`),
+	}
+
+	enc, err := fam.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterApproximateMatch
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (givenName~=Jesse)
+}
+
+func ExampleFilterEqualityMatch_roundTripBER() {
+	fem := FilterEqualityMatch{
+		Desc:  []byte(`givenName`),
+		Value: []byte(`Jesse`),
+	}
+
+	enc, err := fem.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterEqualityMatch
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (givenName=Jesse)
+}
+
+func ExampleFilterExtensibleMatch_roundTripBER() {
+	fem := FilterExtensibleMatch{
+		MatchingRule: []byte(`caseIgnoreMatch`),
+		Type:         []byte(`givenName`),
+		MatchValue:   []byte(`Jesse`),
+	}
+	enc, err := fem.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec FilterExtensibleMatch
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s", dec)
+	// Output: (givenName:caseIgnoreMatch:=Jesse)
+}
+
+func ExampleMatchingRuleAssertion_roundTripDER() {
+	mra := MatchingRuleAssertion{
+		MatchingRule: []byte(`caseIgnoreMatch`),
+		Type:         []byte(`givenName`),
+		MatchValue:   []byte(`Jesse`),
+	}
+
+	enc, err := mra.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec MatchingRuleAssertion
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(mra)
+	// Output: {caseIgnoreMatch givenName Jesse false}
+}
+
+func ExampleAttributeValueAssertion_roundTripBER() {
+	ava := AttributeValueAssertion{
+		Desc:  []byte(`givenName`),
+		Value: []byte(`Jesse`),
+	}
+
+	enc, err := ava.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec AttributeValueAssertion
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%v", dec)
+	// Output: {givenName Jesse}
 }
 
 /*
@@ -70,6 +316,18 @@ func TestFilter(t *testing.T) {
 		Error  string
 		Length int
 	}{
+		{
+			Input:  `(givenName;lang-jp=ジェシー)`, // Jesse :)
+			Output: `(givenName;lang-jp=\e3\82\b8\e3\82\a7\e3\82\b7\e3\83\bc)`,
+			Choice: `equalityMatch`,
+			Length: 1,
+		},
+		{
+			Input:  `(sn;lang-sl:dn:=Lučić)`,
+			Output: `(sn;lang-sl:dn:=Lu\c4\8di\c4\87)`,
+			Choice: `extensibleMatch`,
+			Length: 1,
+		},
 		{
 			Input:  `(objectGUID=\a)`,
 			Output: ``,
@@ -430,8 +688,7 @@ func TestFilter_codecov(t *testing.T) {
 
 	var substrings FilterSubstrings
 	_ = substrings.String()
-	substrings.Substrings = SubstringAssertion{Any: AssertionValue(`blarg`)}
-	substrings.Index(9)
+	substrings.Substrings = Substrings{SubstringAny{AssertionValue(`blarg`)}}
 	substrings.Len()
 	substrings.IsZero()
 

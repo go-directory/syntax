@@ -31,12 +31,16 @@ func seq(content ...[]byte) []byte {
 // Context-specific [tag] containing a primitive value
 func ctx(tag byte, val []byte) []byte {
 	// [tag], primitive
-	header := []byte{0x80 | tag, byte(len(val))}
+	header := []byte{2 | tag, byte(len(val))}
 	return append(header, val...)
 }
 
-func ctxPrim(tag byte, val []byte) []byte {
-	return append([]byte{0x80 | tag, byte(len(val))}, val...)
+func ctxPrim(tag int, payload []byte) []byte {
+	// Context-specific primitive tag: 0x02 | tag
+	t := 2 | tag
+
+	// DER encode: tag, length, payload
+	return append([]byte{byte(t), byte(len(payload))}, payload...)
 }
 
 func ctxSeq(tag byte, content ...[]byte) []byte {

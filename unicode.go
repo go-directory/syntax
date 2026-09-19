@@ -31,6 +31,32 @@ var (
 
 var telephoneNumberRunes []rune
 
+func isDigits(x []byte) (is bool) {
+	L := len(x)
+	if L == 0 {
+		return false
+	}
+
+	for i := 0; i < len(x) && !is; i++ {
+		is = isDigit(rune(x[i]))
+	}
+
+	return
+}
+
+// foldRune is returns the smallest rune for
+// all runes in the same fold set.
+func foldRune(r rune) rune {
+	for {
+		r2 := unicode.SimpleFold(r)
+		if r2 <= r {
+			return r
+		}
+		r = r2
+	}
+}
+
+func isBase2(r rune) bool  { return '0' == r || r == '1' }
 func isDigit(r rune) bool  { return '0' <= r && r <= '9' }
 func isLAlpha(r rune) bool { return 'a' <= r && r <= 'z' }
 func isUAlpha(r rune) bool { return 'A' <= r && r <= 'Z' }

@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"bytes"
+	"errors"
 )
 
 func caseIgnoreMatch(a, b any) (result bool, err error) {
@@ -85,57 +86,84 @@ func caseExactSubstringsMatch(a, b any) (result bool, err error) {
 
 func substringsMatch(a, b any, caseIgnore ...bool) (result bool, err error) {
 	var value []byte
-	if value, err = assertBytes(a, 1, "actual value"); err != nil {
+	value, err = assertBytes(a, 1, "actual value")
+	if err != nil {
 		return
 	}
 
-	var B SubstringAssertion
-	if B, err = marshalSubstringAssertion(b); err != nil {
+	var subs Substrings
+	subs, err = marshalSubstrings(b)
+	if err != nil {
 		return
 	}
 
-	caseHandler := func(val []byte) []byte { return val }
-
+	caseHandler := func(v []byte) []byte { return v }
 	if len(caseIgnore) > 0 && caseIgnore[0] {
 		caseHandler = lc
 	}
 
 	value = caseHandler(value)
 
-	if len(B.Any) == 0 {
-		err = errorBadType("Missing SubstringAssertion.Any")
-		return
-	}
+	var init, fin []byte
+	var Any []AssertionValue
 
-	if len(B.Initial) > 0 {
-		initial := caseHandler([]byte(B.Initial))
-		if !bHasPfx(value, initial) {
+	if init, fin, Any, err = substringsSplit(subs, caseHandler); err == nil {
+		if len(init) > 0 {
+			if !bHasPfx(value, init) {
+				return
+			}
+			value = value[len(init):]
+		}
+
+		for _, seg := range Any {
+			if len(seg) == 0 {
+				continue
+			}
+			idx := bytes.Index(value, seg)
+			if idx < 0 {
+				return
+			}
+			value = value[idx+len(seg):]
+		}
+
+		if len(fin) > 0 {
+			result = bHasSfx(value, fin)
 			return
 		}
-		value = value[len(initial):]
+
+		result = true
 	}
 
-	Any := trimStars(caseHandler([]byte(B.Any)))
+	return
+}
 
-	substrings := splitOnByte(Any, '*')
-	for _, substr := range substrings {
-		if len(substr) == 0 {
-			continue
+func substringsSplit(subs Substrings, caseHandler func([]byte) []byte) (init, fin []byte, Any []AssertionValue, err error) {
+	var inits, fins int
+	for _, s := range subs {
+		switch v := s.(type) {
+		case SubstringInitial:
+			init = caseHandler([]byte(v))
+			inits++
+		case SubstringFinal:
+			fin = caseHandler([]byte(v))
+			fins++
+		case SubstringAny:
+			_Any := make([]AssertionValue, len(v))
+			for i := range v {
+				_Any[i] = AssertionValue(caseHandler([]byte(v[i])))
+			}
+			Any = append(Any, _Any...)
 		}
-		idx := bytes.Index(value, substr)
-		if idx == -1 {
-			return
-		}
-		value = value[idx+len(substr):]
 	}
 
-	if len(B.Final) > 0 {
-		final := caseHandler([]byte(B.Final))
-		result = bHasSfx(value, final)
-		return
+	if len(Any) == 0 {
+		err = errorBadType("Substrings: at least one \"any\" AssertionValue is required")
+	} else if inits > 1 {
+		err = errors.New("Substrings: \"init\" AssertionValue can appear only once")
+	} else if fins > 1 {
+		err = errors.New("Substrings: \"final\" AssertionValue can appear only once")
 	}
 
-	result = true
 	return
 }
 

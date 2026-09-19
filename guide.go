@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strconv"
 	"strings"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -16,21 +18,7 @@ From [§ 3.3.10 of RFC 4517]:
 	object-class  = WSP oid WSP
 	subset        = "baseObject" / "oneLevel" / "wholeSubtree"
 
-	criteria   = and-term *( BAR and-term )
-	and-term   = term *( AMPERSAND term )
-	term       = EXCLAIM term /
-	             attributetype DOLLAR match-type /
-	             LPAREN criteria RPAREN /
-	             true /
-	             false
-	match-type = "EQ" / "SUBSTR" / "GE" / "LE" / "APPROX"
-	true       = "?true"
-	false      = "?false"
-	BAR        = %x7C  ; vertical bar ("|")
-	AMPERSAND  = %x26  ; ampersand ("&")
-	EXCLAIM    = %x21  ; exclamation mark ("!")
-
-From [ITU-T Rec. X.520, clause 9.2.11]:
+From [§ 9.2.11 of ITU-T Rec. X.520]:
 
 	EnhancedGuide ::= SEQUENCE {
 		objectClass	[0] OBJECT-CLASS.&id,
@@ -42,19 +30,47 @@ From [ITU-T Rec. X.520, clause 9.2.11]:
 	... }
 
 [§ 3.3.10 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.10
-[ITU-T Rec. X.520, clause 9.2.11]: https://www.itu.int/rec/T-REC-X.520
+[§ 9.2.11 of ITU-T Rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
 type EnhancedGuide struct {
-	ObjectClass []byte   `asn1:"tag:0"`
-	Criteria    Criteria `asn1:"tag:1"`
-	Subset      int      `asn1:"tag:2,default:1"`
+	ObjectClass ObjectIdentifier `asn1:"tag:0"`
+	Criteria    Criteria         `asn1:"tag:1"`
+	Subset      Integer          `asn1:"tag:2,default:1"`
 }
 
 /*
-EnhancedGuide returns an instance of [EnhancedGuide] alongside an error.
+NewEnhancedGuide returns an instance of [EnhancedGuide] alongside an error
+following an attempt to parse x under the terms of the "Enhanced Guide" ABNF,
+per [§ 3.3.10 of RFC 4517].
+
+[§ 3.3.10 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.10
 */
 func NewEnhancedGuide(x any) (EnhancedGuide, error) {
 	return marshalEnhancedGuide(x)
+}
+
+/*
+Encode returns an instance of []byte alongside an error following
+an attempt to encode the receiver instance as an ASN.1 SEQUENCE.
+*/
+func (r EnhancedGuide) Encode() ([]byte, error) {
+	oc, err := r.ObjectClass.Encode()
+	var outer []byte
+	if err == nil {
+		var payload []byte
+		payload = append(payload, oc...)
+		var crit []byte
+		if crit, err = r.Criteria.Encode(); err == nil {
+			payload = append(payload, crit...)
+			var subset []byte
+			if subset, err = r.Subset.Encode(); err == nil {
+				payload = append(payload, subset...)
+				outer, err = asn1.WrapTLV(payload, uSeqTag())
+			}
+		}
+	}
+
+	return outer, err
 }
 
 func enhancedGuide(x any) (result bool, err error) {
@@ -69,37 +85,29 @@ func marshalEnhancedGuide(x any) (g EnhancedGuide, err error) {
 		return
 	}
 
-	raws := splitUnescapedBytes(raw, []byte(`#`), []byte(`\`))
+	raws := splitUnescapedBytes(raw, tSharp, tBSlash)
 	if len(raws) != 3 {
 		err = syntaxError("Enhanced Guide: bad syntax")
 		return
 	}
 
-	// object-class is the first of three (3)
-	// mandatory Enhanced Guide components.
 	oc := bytes.TrimSpace(raws[0])
-	var res bool
-	if res, err = oID(oc); !res {
-		err = syntaxError("Enhanced Guide: invalid object-class: ",
-			string(oc))
+	g.ObjectClass, err = NewObjectIdentifier(oc)
+	if err != nil {
 		return
 	}
-	g.ObjectClass = oc
 
-	// criteria is the second of three (3)
-	// mandatory Enhanced Guide components.
 	cp := newCriteriaParser(raws[1])
 	g.Criteria = cp.tokenizeCriteria()
 	if err = g.Criteria.Valid(); err != nil {
 		err = syntaxError("Enhanced Guide: invalid Criteria: ",
-			err.Error(), " -- ", string(raws[1]))
+			err.Error(), " -- ", b2s(raws[1]))
 		return
 	}
 
-	// subset is the last of three (3)
-	// mandatory Enhanced Guide components.
-	if g.Subset = subsetToInt(raws[2]); g.Subset == -1 {
-		err = syntaxError("Enhanced Guide: incompatible subset: ", string(raws[2]))
+	if g.Subset = subsetToInt(raws[2]); g.Subset.Native() == -1 {
+		err = syntaxError("Enhanced Guide: incompatible subset: ",
+			b2s(raws[2]))
 	}
 
 	return
@@ -109,8 +117,8 @@ func marshalEnhancedGuide(x any) (g EnhancedGuide, err error) {
 String returns the string representation of the receiver instance.
 */
 func (r EnhancedGuide) String() (s string) {
-	if &r != nil {
-		s = string(r.ObjectClass) + `#` +
+	if &r != nil && r.Criteria != nil {
+		s = r.ObjectClass.String() + `#` +
 			r.Criteria.String() + `#` +
 			intToSubset(r.Subset)
 	}
@@ -118,23 +126,23 @@ func (r EnhancedGuide) String() (s string) {
 	return
 }
 
-func subsetToInt(x []byte) (i int) {
-	i = -1
-	switch string(lc(bytes.TrimSpace(x))) {
+func subsetToInt(x []byte) (i Integer) {
+	i = Integer{ok: true, native: -1}
+	switch b2s(lc(bytes.TrimSpace(x))) {
 	case `baseobject`:
-		i = 0
+		i = Integer{ok: true}
 	case `onelevel`:
-		i = 1
+		i = Integer{ok: true, native: 1}
 	case `wholesubtree`:
-		i = 2
+		i = Integer{ok: true, native: 2}
 	}
 
 	return
 }
 
-func intToSubset(x int) (s string) {
+func intToSubset(x Integer) (s string) {
 	s = `oneLevel`
-	switch x {
+	switch x.Native() {
 	case 0:
 		s = `baseObject`
 	case 2:
@@ -170,13 +178,10 @@ From [§ 3.3.14 of RFC 4517]:
 [§ 3.3.14 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.14
 */
 type Guide struct {
-	ObjectClass []byte   `asn1:"tag:0,optional"`
-	Criteria    Criteria `asn1:"tag:1"`
+	ObjectClass ObjectIdentifier `asn1:"tag:0,optional"`
+	Criteria    Criteria         `asn1:"tag:1"`
 }
 
-/*
-Guide returns an instance of [Guide] alongside an error.
-*/
 func NewGuide(x any) (Guide, error) {
 	return marshalGuide(x)
 }
@@ -193,20 +198,15 @@ func marshalGuide(x any) (g Guide, err error) {
 		return
 	}
 
-	raws := splitUnescapedBytes(raw, []byte(`#`), []byte(`\`))
+	raws := splitUnescapedBytes(raw, tSharp, tBSlash)
 
 	switch l := len(raws); l {
 	case 1:
-		// Assume single value is the criteria
 		cp := newCriteriaParser(raws[0])
 		g.Criteria = cp.tokenizeCriteria()
 	case 2:
-		// Assume two (2) components represent the
-		// object-class and criteria respectively.
 		oc := bytes.TrimSpace(raws[0])
-		var res bool
-		if res, err = oID(oc); res {
-			g.ObjectClass = oc
+		if g.ObjectClass, err = NewObjectIdentifier(oc); err == nil {
 			cp := newCriteriaParser(raws[1])
 			g.Criteria = cp.tokenizeCriteria()
 		}
@@ -226,9 +226,9 @@ func marshalGuide(x any) (g Guide, err error) {
 String returns the string representation of the receiver instance.
 */
 func (r Guide) String() (s string) {
-	if &r != nil {
+	if &r != nil && r.Criteria != nil {
 		if r.ObjectClass != nil {
-			s += string(r.ObjectClass) + `#`
+			s += r.ObjectClass.String() + `#`
 		}
 		s += r.Criteria.String()
 	}
@@ -237,149 +237,344 @@ func (r Guide) String() (s string) {
 }
 
 /*
-Term implements the slice component of an instance of [AndTerm].  Term
-is qualified through instances of [AttributeMatchTerm], [BoolTerm],
-and [Criteria].
+CriteriaItem implements the CriteriaItem ASN.1 CHOICE definition, per
+[§ 6.5.2 of ITU-T rec. X.520]:
+
+	CriteriaItem ::= CHOICE {
+	  equality         [0] AttributeType,
+	  substrings       [1] AttributeType,
+	  greaterOrEqual   [2] AttributeType,
+	  lessOrEqual      [3] AttributeType,
+	  approximateMatch [4] AttributeType,
+	  ... }
+
+This interface is implemented through instances of the following types:
+
+  - [CriteriaItemEquality]
+  - [CriteriaItemSubstrings]
+  - [CriteriaItemGreaterOrEqual]
+  - [CriteriaItemLessOrEqual]
+  - [CriteriaItemApproximateMatch]
+
+Note that the [Criteria] interface is a superset of this interface.
+
+As a whole, instances of this type represent the "type" ASN.1 CHOICE
+component of a [Criteria] implementation. Therefore, when encoded by
+itself, an instance of this type shall only bear the CONTEXT-SPECIFIC
+tags shown in the above definition. But when encoded in a bonafide
+[Criteria] context, the encoding is wrapped in an additional UNIVERSAL [0]
+context.
+
+[§ 6.5.2 of ITU-T rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
-type Term interface {
+type CriteriaItem interface {
+	Tag() int
+	Choice() string
 	String() string
-	IsZero() bool
+	Encode() ([]byte, error)
+	Len() int
+	Index(int) Criteria
 	Valid() error
+
+	// CriteriaItem spans two interfaces: Criteria
+	// and CritieriaItem.
+	isCriteria()
+	isCriteriaItem()
 }
 
+type invalidCriteriaItem struct{}
+
 /*
-Valid returns an error following an analysis of the receiver instance.
+CriteriaItemEquality implements the "equality" [AttributeType]
+CHOICE type for a [CriteriaItem].
 */
-func (r AttributeMatchTerm) Valid() (err error) {
-	if _, err = oID(r.AttributeType); err != nil {
-		err = syntaxError("Invalid attributeType for attributeMatchTerm: ", err.Error())
-	} else if _, found := matchTerms[string(bytes.ToUpper(r.MatchType))]; !found {
-		err = syntaxError("Invalid matchType for attributeMatchTerm")
+type CriteriaItemEquality AttributeType
+
+/*
+CriteriaItemSubstrings implements the "substrings" [AttributeType]
+CHOICE type for a [CriteriaItem].
+*/
+type CriteriaItemSubstrings AttributeType
+
+/*
+CriteriaItemGreaterOrEqual implements the "greaterOrEqual" [AttributeType]
+CHOICE type for a [CriteriaItem].
+*/
+type CriteriaItemGreaterOrEqual AttributeType
+
+/*
+CriteriaItemLessOrEqual implements the "lessOrEqual" [AttributeType]
+CHOICE type for a [CriteriaItem].
+*/
+type CriteriaItemLessOrEqual AttributeType
+
+/*
+CriteriaItemApproximateMatch implements the "approximateMatch" [AttributeType]
+CHOICE type for a [CriteriaItem].
+*/
+type CriteriaItemApproximateMatch AttributeType
+
+func (_ invalidCriteriaItem) Encode() ([]byte, error) {
+	return nil, errInvalidCritItem
+}
+
+func (r CriteriaItemEquality) Encode() ([]byte, error) {
+	return criteriaItemEncode(r, r.Tag())
+}
+
+func (r CriteriaItemSubstrings) Encode() ([]byte, error) {
+	return criteriaItemEncode(r, r.Tag())
+}
+
+func (r CriteriaItemGreaterOrEqual) Encode() ([]byte, error) {
+	return criteriaItemEncode(r, r.Tag())
+}
+
+func (r CriteriaItemLessOrEqual) Encode() ([]byte, error) {
+	return criteriaItemEncode(r, r.Tag())
+}
+
+func (r CriteriaItemApproximateMatch) Encode() ([]byte, error) {
+	return criteriaItemEncode(r, r.Tag())
+}
+
+func criteriaItemEncode(raw []byte, tag int) (outer []byte, err error) {
+	var payload []byte
+	if payload, err = OctetString(raw).Encode(); err == nil {
+		outer, err = asn1.WrapTLV(payload,
+			aTag(asn1.ClassContextSpecific,
+				false, uint32(tag)))
 	}
-
-	return
+	return outer, err
 }
 
-var matchTerms = map[string]struct{}{
-	"EQ":     {},
-	"LE":     {},
-	"GE":     {},
-	"APPROX": {},
-	"SUBSTR": {},
-}
+func (_ invalidCriteriaItem) Tag() int { return -1 }
 
 /*
-Valid returns an error following an analysis of the receiver instance.
+Tag returns the integer form of the [0] context tag for a [CriteriaItem] ASN.1 CHOICE.
 */
-func (r BoolTerm) Valid() (err error) {
-	// Nothing to do for this type.
-	return nil
-}
+func (_ CriteriaItemEquality) Tag() int { return 0 }
 
 /*
-Valid returns an error following an analysis of the receiver instance.
+Tag returns the integer form of the [1] context tag for a [CriteriaItem] ASN.1 CHOICE.
 */
-func (r Criteria) Valid() (err error) {
-	if len(r.Set) == 0 {
-		err = syntaxError("Empty criteria")
-	} else {
-		for i := 0; i < len(r.Set) && err == nil; i++ {
-			err = r.Set[i].Valid()
-		}
-	}
-
-	return
-}
+func (_ CriteriaItemSubstrings) Tag() int { return 1 }
 
 /*
-NotTerm negates an instance of [Term].
+Tag returns the integer form of the [2] context tag for a [CriteriaItem] ASN.1 CHOICE.
 */
-type NotTerm struct {
-	Term
-}
+func (_ CriteriaItemGreaterOrEqual) Tag() int { return 2 }
 
 /*
-Valid returns an error following an analysis of the receiver instance.
+Tag returns the integer form of the [3] context tag for a [CriteriaItem] ASN.1 CHOICE.
 */
-func (r NotTerm) Valid() (err error) {
-	if r.Term == nil {
-		err = syntaxError("NotTerm: nil instance")
-	} else {
-		err = r.Term.Valid()
-	}
+func (_ CriteriaItemLessOrEqual) Tag() int { return 3 }
 
-	return
-}
+/*
+Tag returns the integer form of the [4] context tag for a [CriteriaItem] ASN.1 CHOICE.
+*/
+func (_ CriteriaItemApproximateMatch) Tag() int { return 4 }
+
+func (r invalidCriteriaItem) Index(_ int) Criteria { return r }
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] and [CriteriaItem] types.
+*/
+func (r CriteriaItemEquality) Index(_ int) Criteria { return r }
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] and [CriteriaItem] types.
+*/
+func (r CriteriaItemSubstrings) Index(_ int) Criteria { return r }
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] and [CriteriaItem] types.
+*/
+func (r CriteriaItemGreaterOrEqual) Index(_ int) Criteria { return r }
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] and [CriteriaItem] types.
+*/
+func (r CriteriaItemLessOrEqual) Index(_ int) Criteria { return r }
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] and [CriteriaItem] types.
+*/
+func (r CriteriaItemApproximateMatch) Index(_ int) Criteria { return r }
+
+func (_ invalidCriteriaItem) Choice() string { return `invalid` }
+
+/*
+Choice returns the string literal "equality", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaItemEquality) Choice() string { return "equality" }
+
+/*
+Choice returns the string literal "substrings", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaItemSubstrings) Choice() string { return "substrings" }
+
+/*
+Choice returns the string literal "greaterOrEqual", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaItemGreaterOrEqual) Choice() string { return "greaterOrEqual" }
+
+/*
+Choice returns the string literal "lessOrEqual", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaItemLessOrEqual) Choice() string { return "lessOrEqual" }
+
+/*
+Choice returns the string literal "approximateMatch", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaItemApproximateMatch) Choice() string { return "approximateMatch" }
+
+func (_ invalidCriteriaItem) Len() int { return 1 }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] and [CriteriaItem]
+types.
+*/
+func (_ CriteriaItemEquality) Len() int { return 1 }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] and [CriteriaItem]
+types.
+*/
+func (_ CriteriaItemSubstrings) Len() int { return 1 }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] and [CriteriaItem]
+types.
+*/
+func (_ CriteriaItemGreaterOrEqual) Len() int { return 1 }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] and [CriteriaItem]
+types.
+*/
+func (_ CriteriaItemLessOrEqual) Len() int { return 1 }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] and [CriteriaItem]
+types.
+*/
+func (_ CriteriaItemApproximateMatch) Len() int { return 1 }
+
+func (_ invalidCriteriaItem) String() string { return `` }
 
 /*
 String returns the string representation of the receiver instance.
 */
-func (r NotTerm) String() (s string) {
-	if !r.IsZero() {
-		s = "!" + r.Term.String()
+func (r CriteriaItemEquality) String() string { return b2s(r) + "$EQ" }
+
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r CriteriaItemSubstrings) String() string { return b2s(r) + "$SUBSTR" }
+
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r CriteriaItemGreaterOrEqual) String() string { return b2s(r) + "$GE" }
+
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r CriteriaItemLessOrEqual) String() string { return b2s(r) + "$LE" }
+
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r CriteriaItemApproximateMatch) String() string { return b2s(r) + "$APPROX" }
+
+func (_ invalidCriteriaItem) Valid() (err error) {
+	err = errInvalidCritItem
+	return
+}
+
+/*
+Valid returns an error following an OID syntax check upon the receiver instance.
+*/
+func (r CriteriaItemEquality) Valid() (err error) {
+	if _, err = oID(r); err != nil {
+		err = syntaxError("Invalid attributeType for equality: ", err.Error())
 	}
 	return
 }
 
 /*
-IsZero returns a Boolean value indicative of a nil receiver state.
+Valid returns an error following an OID syntax check upon the receiver instance.
 */
-func (r NotTerm) IsZero() bool { return r.Term == nil }
-
-/*
-TODO - correct this.
-
-	   CriteriaItem ::= CHOICE {
-		equality         [0] AttributeType,
-		substrings       [1] AttributeType,
-		greaterOrEqual   [2] AttributeType,
-		lessOrEqual      [3] AttributeType,
-		approximateMatch [4] AttributeType,
-	        ... }
-*/
-type AttributeMatchTerm struct {
-	AttributeType []byte
-	MatchType     []byte
-}
-
-/*
-String returns the string representation of the receiver instance.
-*/
-func (r AttributeMatchTerm) String() string {
-	return string(r.AttributeType) + "$" + string(r.MatchType)
-}
-
-/*
-IsZero returns a Boolean value indicative of a nil receiver state.
-*/
-func (r AttributeMatchTerm) IsZero() bool { return &r == nil }
-
-/*
-BoolTerm implements a Boolean [Term] qualifier.
-*/
-type BoolTerm struct {
-	bool
-}
-
-/*
-String returns the string representation of the receiver instance.
-*/
-func (b BoolTerm) String() (t string) {
-	t = `?false`
-	if b.bool {
-		t = `?true`
+func (r CriteriaItemSubstrings) Valid() (err error) {
+	if _, err = oID(r); err != nil {
+		err = syntaxError("Invalid attributeType for substrings: ", err.Error())
 	}
 	return
 }
 
 /*
-IsZero returns a Boolean value indicative of a nil receiver state.
+Valid returns an error following an OID syntax check upon the receiver instance.
 */
-func (r BoolTerm) IsZero() bool { return &r == nil }
+func (r CriteriaItemGreaterOrEqual) Valid() (err error) {
+	if _, err = oID(r); err != nil {
+		err = syntaxError("Invalid attributeType for greaterOrEqual: ", err.Error())
+	}
+	return
+}
 
 /*
-Criteria implements the Criteria syntax per [ITU-T Rec. X.520, clause
-6.5.2].
+Valid returns an error following an OID syntax check upon the receiver instance.
+*/
+func (r CriteriaItemLessOrEqual) Valid() (err error) {
+	if _, err = oID(r); err != nil {
+		err = syntaxError("Invalid attributeType for lessOrEqual: ", err.Error())
+	}
+	return
+}
+
+/*
+Valid returns an error following an OID syntax check upon the receiver instance.
+*/
+func (r CriteriaItemApproximateMatch) Valid() (err error) {
+	if _, err = oID(r); err != nil {
+		err = syntaxError("Invalid attributeType for approximateMatch: ", err.Error())
+	}
+	return
+}
+
+func (_ CriteriaItemEquality) isCriteria()         {}
+func (_ CriteriaItemSubstrings) isCriteria()       {}
+func (_ CriteriaItemGreaterOrEqual) isCriteria()   {}
+func (_ CriteriaItemLessOrEqual) isCriteria()      {}
+func (_ CriteriaItemApproximateMatch) isCriteria() {}
+func (_ invalidCriteriaItem) isCriteria()          {}
+
+func (_ CriteriaItemEquality) isCriteriaItem()         {}
+func (_ CriteriaItemSubstrings) isCriteriaItem()       {}
+func (_ CriteriaItemGreaterOrEqual) isCriteriaItem()   {}
+func (_ CriteriaItemLessOrEqual) isCriteriaItem()      {}
+func (_ CriteriaItemApproximateMatch) isCriteriaItem() {}
+func (_ invalidCriteriaItem) isCriteriaItem()          {}
+
+/*
+Criteria implements the Criteria ASN.1 definition defined in
+[§ 6.5.2 of ITU-T rec. X.520]:
 
 	Criteria ::= CHOICE {
 	        type [0] CriteriaItem
@@ -388,114 +583,281 @@ Criteria implements the Criteria syntax per [ITU-T Rec. X.520, clause
 	        not  [3] Criteria,
 	... }
 
-[ITU-T Rec. X.520, clause 6.5.2]: https://www.itu.int/rec/T-REC-X.520
+The ABNF defined in [§ 3.3.10 of RFC 4517] describes the LDAP specific
+encoding of values of this type:
+
+	criteria   = and-term *( BAR and-term )
+	and-term   = term *( AMPERSAND term )
+	term       = EXCLAIM term /
+	             attributetype DOLLAR match-type /
+	             LPAREN criteria RPAREN /
+	             true /
+	             false
+	match-type = "EQ" / "SUBSTR" / "GE" / "LE" / "APPROX"
+	true       = "?true"
+	false      = "?false"
+	BAR        = %x7C  ; vertical bar ("|")
+	AMPERSAND  = %x26  ; ampersand ("&")
+	EXCLAIM    = %x21  ; exclamation mark ("!")
+
+Use of the true/false (?true/?false) terms will result in the assignment of
+a zero length [CriteriaAnd]/[CriteriaOr] instance respectively.
+
+This interface is implemented through instances of the following types:
+
+  - [CriteriaAnd]
+  - [CriteriaOr]
+  - [CriteriaNot]
+  - All [CriteriaItem] types ([CriteriaItem] is a subset of this interface)
+
+[§ 3.3.10 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.10
+[§ 6.5.2 of ITU-T rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
-type Criteria struct {
-	Set   []AndTerm
-	Paren bool
+type Criteria interface {
+	Tag() int
+	Choice() string
+	String() string
+	Len() int
+	Encode() ([]byte, error)
+	Index(int) Criteria
+	Valid() error
+	isCriteria()
+}
+
+type invalidCriteria struct{}
+
+/*
+CriteriaAnd implements the [Criteria] "and" ASN.1 CHOICE.
+*/
+type CriteriaAnd []Criteria
+
+/*
+CriteriaOr implements the [Criteria] "or" ASN.1 CHOICE.
+*/
+type CriteriaOr []Criteria
+
+/*
+CriteriaOr implements the [Criteria] "not" ASN.1 CHOICE.
+*/
+type CriteriaNot struct {
+	Criteria
+}
+
+func (_ invalidCriteria) Tag() int { return -1 }
+
+/*
+Tag returns the integer form of the [1] context tag for a [Criteria] ASN.1 CHOICE.
+*/
+func (_ CriteriaAnd) Tag() int { return 1 }
+
+/*
+Tag returns the integer form of the [2] context tag for a [Criteria] ASN.1 CHOICE.
+*/
+func (_ CriteriaOr) Tag() int { return 2 }
+
+/*
+Tag returns the integer form of the [3] context tag for a [Criteria] ASN.1 CHOICE.
+*/
+func (_ CriteriaNot) Tag() int { return 3 }
+
+func (_ invalidCriteria) Choice() string { return "invalid" }
+
+/*
+Choice returns the string literal "and", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaAnd) Choice() string { return "and" }
+
+/*
+Choice returns the string literal "or", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaOr) Choice() string { return "or" }
+
+/*
+Choice returns the string literal "not", representing the ASN.1 CHOICE
+component name.
+*/
+func (_ CriteriaNot) Choice() string { return "not" }
+
+func (_ invalidCriteria) Encode() ([]byte, error) {
+	return nil, errInvalidCrit
+}
+
+func (r CriteriaAnd) Encode() ([]byte, error) {
+	return nil, nil // placeholder
+}
+
+func (r CriteriaOr) Encode() ([]byte, error) {
+	return nil, nil // placeholder
+}
+
+func (r CriteriaNot) Encode() ([]byte, error) {
+	return nil, nil // placeholder
 }
 
 /*
 String returns the string representation of the receiver instance.
 */
-func (c Criteria) String() string {
+func (r CriteriaAnd) String() string {
+	L := len(r)
+	if L == 0 {
+		return "?true"
+	}
 	var terms []string
-	for _, term := range c.Set {
-		terms = append(terms, term.String())
+	for _, c := range r {
+		terms = append(terms, c.String())
 	}
-
-	s := strings.Join(terms, "|")
-	if c.Paren {
-		s = `(` + s + `)`
-	}
-
-	return s
-}
-
-/*
-IsZero returns a Boolean value indicative of a nil receiver state.
-*/
-func (r Criteria) IsZero() bool { return &r == nil }
-
-/*
-Len returns the integer length of the receiver instance.
-*/
-func (r Criteria) Len() int { return len(r.Set) }
-
-/*
-Index returns the Nth slice instance of [AndTerm] found within the
-receiver instance.
-*/
-func (r Criteria) Index(idx int) (a AndTerm) {
-	if !r.IsZero() {
-		if 0 <= idx && idx < r.Len() {
-			a = r.Set[idx]
-		}
-	}
-
-	return
-}
-
-type AndTerm struct {
-	Set   []Term
-	Paren bool
-}
-
-/*
-Valid returns an error following an analysis of the receiver instance.
-*/
-func (r AndTerm) Valid() (err error) {
-	if len(r.Set) == 0 {
-		err = syntaxError("Empty AndTerm value")
-	} else {
-		for i := 0; i < len(r.Set) && err == nil; i++ {
-			err = r.Set[i].Valid()
-		}
-	}
-
-	return
-}
-
-/*
-Len returns the integer length of the receiver instance.
-*/
-func (r AndTerm) Len() int { return len(r.Set) }
-
-/*
-String returns the string representation of the receiver instance.
-*/
-func (a AndTerm) String() string {
-	var terms []string
-	for _, term := range a.Set {
-		terms = append(terms, term.String())
-	}
-
 	s := strings.Join(terms, "&")
-	if a.Paren {
-		s = `(` + s + `)`
+	if L > 1 {
+		s = "(" + s + ")"
 	}
-
 	return s
 }
 
 /*
-Index returns the Nth slice instance of [Term] found within the
-receiver instance.
+String returns the string representation of the receiver instance.
 */
-func (r AndTerm) Index(idx int) (t Term) {
-	if !r.IsZero() {
-		if 0 <= idx && idx < r.Len() {
-			t = r.Set[idx]
-		}
+func (r CriteriaOr) String() string {
+	L := len(r)
+	if L == 0 {
+		return "?false"
 	}
+	var terms []string
+	for _, c := range r {
+		terms = append(terms, c.String())
+	}
+	s := strings.Join(terms, "|")
+	if L > 1 {
+		s = "(" + s + ")"
+	}
+	return s
+}
 
+/*
+String returns the string representation of the receiver instance.
+*/
+func (r CriteriaNot) String() string {
+	if r.Criteria == nil {
+		return ""
+	}
+	s := r.Criteria.String()
+	if _, ok := r.Criteria.(CriteriaAnd); ok && r.Criteria.Len() > 1 {
+		return "!" + s
+	}
+	if _, ok := r.Criteria.(CriteriaOr); ok && r.Criteria.Len() > 1 {
+		return "!" + s
+	}
+	return "!" + s
+}
+
+func (_ invalidCriteria) String() string { return `` }
+
+/*
+Len returns the integer length of the receiver instance.
+*/
+func (r CriteriaAnd) Len() int { return len(r) }
+
+/*
+Len returns the integer length of the receiver instance.
+*/
+func (r CriteriaOr) Len() int { return len(r) }
+
+/*
+Len returns a fixed integer value of 1. This method exists solely to satisfy Go's
+interface signature requirements with respect to the [Criteria] type.
+*/
+func (_ CriteriaNot) Len() int { return 1 }
+
+func (_ invalidCriteria) Len() int { return -1 }
+
+/*
+Index returns the Nth slice member residing within the receiver instance.
+*/
+func (r CriteriaAnd) Index(idx int) (c Criteria) {
+	if 0 <= idx && idx < len(r) {
+		c = r[idx]
+	}
 	return
 }
 
 /*
-IsZero returns a Boolean value indicative of a nil receiver state.
+Index returns the Nth slice member residing within the receiver instance.
 */
-func (r AndTerm) IsZero() bool { return &r == nil }
+func (r CriteriaOr) Index(idx int) (c Criteria) {
+	if 0 <= idx && idx < len(r) {
+		c = r[idx]
+	}
+	return
+}
+
+/*
+Index returns the receiver instance. This method exists solely to satisfy Go's interface
+signature requirements with respect to the [Criteria] type.
+*/
+func (r CriteriaNot) Index(_ int) Criteria {
+	var c Criteria = invalidCriteria{}
+	if r.Criteria != nil {
+		c = r
+	}
+	return c
+}
+
+func (r invalidCriteria) Index(_ int) Criteria { return r }
+
+/*
+Valid returns an error following a validity check conducted upon all slice members.
+
+Note that a zero-length receiver is considered valid.
+*/
+func (r CriteriaAnd) Valid() (err error) {
+	for i := 0; i < len(r) && err == nil; i++ {
+		if r[i] == nil {
+			err = syntaxError("CriteriaAnd: nil child")
+		} else {
+			err = r[i].Valid()
+		}
+	}
+	return
+}
+
+/*
+Valid returns an error following a validity check conducted upon all slice members.
+
+Note that a zero-length receiver is considered valid.
+*/
+func (r CriteriaOr) Valid() (err error) {
+	for i := 0; i < len(r) && err == nil; i++ {
+		if r[i] == nil {
+			err = syntaxError("CriteriaOr: nil child")
+		} else {
+			err = r[i].Valid()
+		}
+	}
+	return
+}
+
+/*
+Valid returns an error following a validity check conducted upon the underlying
+[Criteria] instance.
+*/
+func (r CriteriaNot) Valid() (err error) {
+	if r.Criteria == nil {
+		err = syntaxError("CriteriaNot: nil instance")
+	} else {
+		err = r.Criteria.Valid()
+	}
+	return
+}
+
+func (_ invalidCriteria) Valid() (err error) {
+	return syntaxError("Criteria: invalid instance")
+}
+
+func (_ invalidCriteria) isCriteria() {}
+func (_ CriteriaAnd) isCriteria()     {}
+func (_ CriteriaOr) isCriteria()      {}
+func (_ CriteriaNot) isCriteria()     {}
 
 type criteriaParser struct {
 	input []byte
@@ -523,54 +885,78 @@ func (t *criteriaParser) peek() byte {
 }
 
 func (t *criteriaParser) tokenizeCriteria() Criteria {
-	var andTerms Criteria
-	andTerms.Set = append(andTerms.Set, t.tokenizeAndTerm())
+	var ors CriteriaOr
+	ors = append(ors, t.tokenizeAndTerm())
 	for t.peek() == '|' {
 		t.next()
-		andTerms.Set = append(andTerms.Set, t.tokenizeAndTerm())
+		ors = append(ors, t.tokenizeAndTerm())
 	}
-	return andTerms
+
+	L := len(ors)
+	// NOTE: zero length is OK! // bool term==false
+	if L == 1 {
+		return ors[0]
+	}
+	return ors
 }
 
-func (t *criteriaParser) tokenizeAndTerm() AndTerm {
-	var terms AndTerm
-	terms.Set = append(terms.Set, t.tokenizeTerm())
+func (t *criteriaParser) tokenizeAndTerm() Criteria {
+	var and CriteriaAnd
+	and = append(and, t.tokenizeTerm())
 	for t.peek() == '&' {
 		t.next()
-		terms.Set = append(terms.Set, t.tokenizeTerm())
+		and = append(and, t.tokenizeTerm())
 	}
-	return terms
+
+	L := len(and)
+	// NOTE: zero length is OK! // bool term==true
+	if L == 1 {
+		return and[0]
+	}
+
+	return and
 }
 
-func (t *criteriaParser) tokenizeTerm() Term {
+func (t *criteriaParser) tokenizeTerm() Criteria {
 	switch t.peek() {
 	case '!':
 		t.next()
-		return NotTerm{Term: t.tokenizeTerm()}
+		return CriteriaNot{Criteria: t.tokenizeTerm()}
 	case '(':
 		t.next()
-		criteria := t.tokenizeCriteria()
-		criteria.Paren = true
-		t.next() // Consume ')'
-		return criteria
+		c := t.tokenizeCriteria()
+		t.next()
+		return c
 	case '?':
 		t.next()
-		if bHasPfx(t.input[t.pos:], []byte("true")) {
+		if bHasPfx(t.input[t.pos:], tTrue) {
 			t.pos += 4
-			return BoolTerm{bool: true}
-		} else if bHasPfx(t.input[t.pos:], []byte("false")) {
+			return CriteriaAnd{}
+		} else if bHasPfx(t.input[t.pos:], tFalse) {
 			t.pos += 5
-			return BoolTerm{bool: false}
+			return CriteriaOr{}
 		}
 	}
 
 	attrType := t.tokenizeUntil('$')
-	t.next() // Consume '$'
+	t.next()
 	matchType := t.tokenizeMatchType()
-	return AttributeMatchTerm{
-		AttributeType: attrType,
-		MatchType:     matchType,
+	var item CriteriaItem
+	switch strings.ToUpper(b2s(matchType)) {
+	case "EQ":
+		item = CriteriaItemEquality(attrType)
+	case "SUBSTR":
+		item = CriteriaItemSubstrings(attrType)
+	case "GE":
+		item = CriteriaItemGreaterOrEqual(attrType)
+	case "LE":
+		item = CriteriaItemLessOrEqual(attrType)
+	case "APPROX":
+		item = CriteriaItemApproximateMatch(attrType)
+	default:
+		return invalidCriteriaItem{}
 	}
+	return item
 }
 
 func (t *criteriaParser) tokenizeUntil(delims ...byte) []byte {
@@ -593,31 +979,36 @@ func (t *criteriaParser) tokenizeUntil(delims ...byte) []byte {
 func (t *criteriaParser) tokenizeMatchType() (s []byte) {
 	switch t.peek() {
 	case 'E':
-		if bHasPfx(t.input[t.pos:], []byte("EQ")) {
+		if bHasPfx(t.input[t.pos:], tItemEQ) {
 			t.pos += 2
-			s = []byte("EQ")
+			s = tItemEQ
 		}
 	case 'S':
-		if bHasPfx(t.input[t.pos:], []byte("SUBSTR")) {
+		if bHasPfx(t.input[t.pos:], tItemSUB) {
 			t.pos += 6
-			s = []byte("SUBSTR")
+			s = tItemSUB
 		}
 	case 'G':
-		if bHasPfx(t.input[t.pos:], []byte("GE")) {
+		if bHasPfx(t.input[t.pos:], tItemGE) {
 			t.pos += 2
-			s = []byte("GE")
+			s = tItemGE
 		}
 	case 'L':
-		if bHasPfx(t.input[t.pos:], []byte("LE")) {
+		if bHasPfx(t.input[t.pos:], tItemLE) {
 			t.pos += 2
-			s = []byte("LE")
+			s = tItemLE
 		}
 	case 'A':
-		if bHasPfx(t.input[t.pos:], []byte("APPROX")) {
+		if bHasPfx(t.input[t.pos:], tItemAPX) {
 			t.pos += 6
-			s = []byte("APPROX")
+			s = tItemAPX
 		}
 	}
 
 	return
 }
+
+var (
+	errInvalidCritItem = syntaxError("Criteria Item: invalid instance")
+	errInvalidCrit     = syntaxError("Criteria: invalid instance")
+)

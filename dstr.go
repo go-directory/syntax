@@ -19,7 +19,7 @@ From [§ 1.4 of RFC 4512]:
 	UTF4  = %xF0 %x90-BF 2(UTF0) / %xF1-F3 3(UTF0) /
 	        %xF4 %x80-8F 2(UTF0)
 
-From [ITU-T Rec. X.520 clause 2.6]:
+From [§ 2.6 of ITU-T Rec. X.520]:
 
 	UnboundedDirectoryString ::= CHOICE {
 		teletexString TeletexString(SIZE (1..MAX)),
@@ -43,7 +43,7 @@ as this is preferred in LDAP.
 
 [§ 1.4 of RFC 4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
 [§ 3.3.6 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.6
-[ITU-T Rec. X.520 clause 2.6]: https://www.itu.int/rec/T-REC-X.520
+[§ 2.6 of ITU-T Rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
 type DirectoryString interface {
 	String() string

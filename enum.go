@@ -5,7 +5,13 @@ import (
 )
 
 /*
-Enumerated implements the ASN.1 ENUMERATED type (tag 10).
+Enumerated implements the ASN.1 ENUMERATED type (tag 10), per [§ 20 of
+ITU-T Rec. X.680]:
+
+	EnumeratedType ::=
+	    ENUMERATED "{" Enumerations "}"
+
+[§ 20 of ITU-T Rec. X.680]: https://www.itu.int/rec/T-REC-X.680
 */
 type Enumerated int
 

@@ -6,9 +6,30 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
+func aTag(class byte, constr bool, tag uint32) asn1.Tag {
+	return asn1.Tag{
+		Class:       class,
+		Constructed: constr,
+		Tag:         uint32(tag),
+	}
+}
+
+func uSeqTag() asn1.Tag { return aTag(0, true, 16) }
+
 type textLike interface{ ~string | ~[]byte }
+
+var itoa = strconv.Itoa
+var atoi = strconv.Atoi
+var puint = strconv.ParseUint
+var fuint = strconv.FormatUint
+var fint = strconv.FormatInt
+
+func b2s(b []byte) string { return string(b) }
+func s2b(b string) []byte { return []byte(b) }
 
 func beq(a, b []byte) bool {
 	if len(a) != len(b) {
@@ -422,27 +443,46 @@ func hexDecode(x any) string {
 func strInSlice(r any, slice []string, cEM ...bool) (match bool) {
 	// assume caseIgnoreMatch by default
 	funk := strings.EqualFold
-	if len(cEM) > 0 {
-		if cEM[0] {
-			// use caseExactMatch
-			funk = func(a, b string) bool {
-				return a == b
-			}
+	if len(cEM) > 0 && cEM[0] {
+		// use caseExactMatch
+		funk = func(a, b string) bool { return a == b }
+	}
+
+	loop := func(a string) (match bool) {
+		for i := 0; i < len(slice) && !match; i++ {
+			match = funk(a, slice[i])
 		}
+		return
 	}
 
 	switch tv := r.(type) {
 	case string:
-		for i := 0; i < len(slice) && !match; i++ {
-			match = funk(tv, slice[i])
-		}
+		match = loop(tv)
 	case []string:
 		for i := 0; i < len(tv) && !match; i++ {
-			for j := 0; j < len(slice) && !match; j++ {
-				match = funk(tv[i], slice[j])
-			}
+			match = loop(tv[i])
 		}
 	}
 
 	return
+}
+
+// foldString returns a folded string such that foldString(x) == foldString(y)
+// is identical to bytes.EqualFold(x, y).
+// based on https://go.dev/src/encoding/json/fold.go
+func foldString(s string) string {
+	builder := strings.Builder{}
+	for _, char := range s {
+		// Handle single-byte ASCII.
+		if char < runeSelf {
+			if 'A' <= char && char <= 'Z' {
+				char += 'a' - 'A'
+			}
+			builder.WriteRune(char)
+			continue
+		}
+
+		builder.WriteRune(foldRune(char))
+	}
+	return builder.String()
 }

@@ -18,8 +18,8 @@ const (
 )
 
 /*
-FacsimileTelephoneNumber implements [§ 3.3.11 of RFC 4517] and [ITU-T Rec.
-X.520 clause 6.7.4].
+FacsimileTelephoneNumber implements [§ 3.3.11 of RFC 4517] and [§ 6.7.4 of ITU-T Rec.
+X.520].
 
 From [§ 3.3.11 of RFC 4517]:
 
@@ -49,7 +49,7 @@ ASN.1 definitions:
 		uncompressed         (30) }
 
 [§ 3.3.11 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.11
-[ITU-T Rec. X.520 clause 6.7.4]: https://www.itu.int/rec/T-REC-X.520
+[§ 6.7.4 of ITU-T Rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
 type FacsimileTelephoneNumber struct {
 	TelephoneNumber               PrintableString `asn1:"printable"`
@@ -184,11 +184,11 @@ func marshalFacsimileTelephoneNumber(x any) (ftn FacsimileTelephoneNumber, err e
 }
 
 /*
-TelephoneNumber implements [§ 3.3.31 of RFC 4517] and [ITU-T Rec. X.520 clause 6.7.1]:
+TelephoneNumber implements [§ 3.3.31 of RFC 4517] and [§ 6.7.1 of ITU-T Rec. X.520]:
 
 	PrintableString (SIZE(1..ub-telephone-number))
 
-[ITU-T Rec. X.520 clause 6.7.1]: https://www.itu.int/rec/T-REC-X.520
+[§ 6.7.1 of ITU-T Rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 [§ 3.3.31 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.31
 */
 type TelephoneNumber PrintableString

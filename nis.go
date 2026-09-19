@@ -2,6 +2,8 @@ package syntax
 
 import (
 	"strings"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -112,6 +114,77 @@ func NewNetgroupTriple(x any) (trip NetgroupTriple, err error) {
 	}
 
 	return
+}
+
+/*
+Encode returns an instance of []byte alongside an error following
+an attempt to encode the receiver instance as a UNIVERSAL SEQUENCE.
+*/
+func (r NetgroupTriple) Encode() ([]byte, error) {
+	var payload []byte
+	var err error
+	var out []byte
+	for idx, component := range []IA5String{
+		r.Hostname,
+		r.Username,
+		r.Domain,
+	} {
+		if len(component) > 0 {
+			var enc []byte
+			if enc, err = component.Encode(); err != nil {
+				break
+			}
+
+			// wrap it in a context tag
+			var wrap []byte
+			wrap, err = asn1.WrapTLV(enc,
+				aTag(asn1.ClassContextSpecific,
+					false, uint32(idx)))
+			if err != nil {
+				break
+			}
+			payload = append(payload, wrap...)
+		}
+	}
+
+	if err == nil {
+		out, err = asn1.WrapTLV(payload, uSeqTag())
+	}
+
+	return out, err
+}
+
+func (r *NetgroupTriple) Decode(enc []byte) error {
+	payload, err := asn1.UnwrapTLV(enc, uSeqTag())
+	if err == nil {
+		p := 0
+		for i := 0; i < 3 && err == nil; i++ {
+			var tlv []byte
+			tlv, err = asn1.ReadExpectedPrimitiveTLV(
+				payload,
+				&p,
+				asn1.ClassContextSpecific,
+				uint32(i))
+
+			if err == nil {
+				var ia5 IA5String
+				if err = ia5.Decode(tlv); err == nil {
+					switch i {
+					case 0:
+						r.Hostname = ia5
+					case 1:
+						r.Username = ia5
+					case 2:
+						r.Domain = ia5
+					default:
+						err = asn1Error("NetgroupTriple: extra data found during decode")
+					}
+				}
+			}
+		}
+	}
+
+	return err
 }
 
 func validTripleEncap(raw string) (err error) {
@@ -266,6 +339,79 @@ func NewBootParameter(x any) (bp BootParameter, err error) {
 	}
 
 	return
+}
+
+/*
+Encode returns an instance of []byte alongside an error following
+an attempt to encode the receiver instance as a UNIVERSAL SEQUENCE.
+*/
+func (r BootParameter) Encode() ([]byte, error) {
+	var payload []byte
+	var err error
+
+	for _, component := range []IA5String{
+		r.Key,
+		r.Server,
+		r.Path,
+	} {
+		if len(component) == 0 {
+			continue
+		}
+
+		var enc []byte
+		enc, err = component.Encode() // IA5 TLV: 16 LL VALUE
+		if err != nil {
+			return nil, err
+		}
+
+		payload = append(payload, enc...)
+	}
+
+	return asn1.WrapTLV(payload, uSeqTag())
+}
+
+func (r *BootParameter) Decode(enc []byte) error {
+	payload, err := asn1.UnwrapTLV(enc, uSeqTag())
+	if err != nil {
+		return err
+	}
+
+	p := 0
+	for i := 0; i < 3; i++ {
+		if p >= len(payload) {
+			return asn1Error("BootParameter: truncated IA5String")
+		}
+
+		// Expect IA5 tag
+		if payload[p] != asn1.TagIA5String {
+			return errIA5Decode
+		}
+
+		// Read IA5 length
+		l, n := asn1.ReadPrimitiveLength(payload[p+1:])
+		if n == 0 || len(payload) < p+1+n+l {
+			return errIA5Decode
+		}
+
+		// Full IA5 TLV slice
+		tlv := payload[p : p+1+n+l]
+
+		var ia5 IA5String
+		if err = ia5.Decode(tlv); err == nil {
+			switch i {
+			case 0:
+				r.Key = ia5
+			case 1:
+				r.Server = ia5
+			case 2:
+				r.Path = ia5
+			}
+
+			p += 1 + n + l
+		}
+	}
+
+	return nil
 }
 
 // TODO - not sure if we need this

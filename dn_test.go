@@ -1,25 +1,86 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
 
-func TestDistinguisedName_PreProc(t *testing.T) {
+func ExampleRelativeLDAPDN_roundTripBER() {
+	dn, err := NewRelativeLDAPDN([]byte("cn=Jesse Coretta+o=Acme Co"))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = dn.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec RelativeLDAPDN
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: cn=Jesse Coretta+o=Acme Co
+}
+
+func ExampleLDAPDN_roundTripBER() {
+	dn, err := NewLDAPDN([]byte("cn=Jesse Coretta+o=Acme Co,ou=Consultants,ou=People,dc=example,dc=com"))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = dn.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec LDAPDN
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: cn=Jesse Coretta+o=Acme Co,ou=Consultants,ou=People,dc=example,dc=com
+}
+
+func TestDistinguisedName(t *testing.T) {
 	orig := []byte("cn=Jesse Coretta+o=Acme Co,ou=Consultants,ou=People,dc=example,dc=com")
-	_, err := NewDistinguishedName(orig, true)
+	dn, err := NewDistinguishedName(orig, true)
 	if err != nil {
 		t.Fatalf("%s failed: %v", t.Name(), err)
+	} else if len(dn.Normal) == 0 {
+		t.Fatalf("%s preprocessing failed: no normalized DN", t.Name())
 	}
-	/*
-	   t.Logf("%s\n", dn.Case)
-	   t.Logf("%s\n", dn.Normal)
 
-	   	for i := 0; i < len(dn.Attributes); i++ {
-	   		t.Logf("%s\n", dn.Attributes[i]) // cn, o, ou, dc
-	   	}
+	dn.Boundary = 1
 
-	   	for i := 0; i < len(dn.Values); i++ {
-	   		t.Logf("%s\n", dn.Values[i]) // Jesse Coretta, Acme Co, Consultants, People, example, com
-	   	}
-	*/
+	root, _ := dn.Root()
+	sup, _ := dn.Superior()
+	sub, _ := dn.Subordinate("cn=Private Mailing List")
+
+	want := `dc=example,dc=com`
+	if got := string(root.Case); got != want {
+		t.Fatalf("%s root truncation failed:\n\twant: %q\n\tgot:  %q :=  no normalized DN",
+			t.Name(), want, got)
+	}
+
+	want = `ou=Consultants,ou=People,dc=example,dc=com`
+	if got := string(sup.Case); got != want {
+		t.Fatalf("%s superior truncation failed:\n\twant: %q\n\tgot:  %q :=  no normalized DN",
+			t.Name(), want, got)
+	}
+
+	want = `cn=Private Mailing List,cn=Jesse Coretta+o=Acme Co,ou=Consultants,ou=People,dc=example,dc=com`
+	if got := string(sub.Case); got != want {
+		t.Fatalf("%s subordinate creation failed:\n\twant: %q\n\tgot:  %q :=  no normalized DN",
+			t.Name(), want, got)
+	}
 }

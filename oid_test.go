@@ -5,6 +5,33 @@ import (
 	"testing"
 )
 
+func ExampleLDAPOID_roundTripDER() {
+	loid := LDAPOID(`2.5.4.3`) // cn
+
+	enc, err := loid.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec LDAPOID
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: 2.5.4.3
+}
+
+func ExampleNewLDAPOID() {
+	loid, err := NewLDAPOID(`2.5.4.3`) // cn
+	if err == nil {
+		fmt.Println(loid)
+	}
+	// Output: 2.5.4.3
+}
+
 func BenchmarkObjectIdentifierASN1(b *testing.B) {
 	o, _ := NewObjectIdentifier(`1.3.6.1.4.1.56521.999`)
 	b.StopTimer()

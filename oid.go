@@ -6,6 +6,7 @@ OBJECT IDENTIFIER type.
 */
 
 import (
+	"bytes"
 	"math"
 	"math/big"
 	"strconv"
@@ -13,6 +14,110 @@ import (
 
 	"github.com/go-directory/encoding/vlq"
 )
+
+/*
+LDAPOID is the ASN.1 OCTET STRING form of a numeric OID, defined in [§ 4.1.2
+of RFC4511].
+
+Complete values of instances of this type are constrained for basic X.680 number
+form sanity (i.e.: no non-base 10 arcs, no negative arcs), as well as ensure the
+"first and second arc combinations" are legal.
+
+Characters in values of this type are constrained to those defined for ["numericoid",
+per § 1.4 of RFC4512].
+
+Use of this instances of this type instead of [ObjectIdentifier] is generally
+preferred in cases where performance is the top concern, or where an OID is to be
+sent over the wire via a directory protocol.
+
+[§ 4.1.2 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.1.2
+["numericoid", per § 1.4 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4511#section-1.4
+*/
+type LDAPOID OctetString
+
+/*
+NewLDAPOID returns an instance of [LDAPOID] alongside an error following an
+attempt to parse the input value as a UTF-8 encoded OCTET STRING containing
+a numeric OID.
+*/
+func NewLDAPOID(x any) (LDAPOID, error) { return marshalLDAPOID(x) }
+
+func marshalLDAPOID(x any) (loid LDAPOID, err error) {
+	var b []byte
+	if b, err = assertBytes(x, 3, "LDAPOID"); err == nil {
+		parts := bytes.Split(b, []byte("."))
+		L := len(parts)
+		if L < 2 {
+			return nil, errorOIDMinLen
+		}
+		if err = checkFirstArcs(parts[0], parts[1]); err == nil {
+			if L > 2 {
+				// We've already processed the first two, so start
+				// at slice 3 and only evaluate string numbers as
+				// being both unsigned and strictly base 10.
+				for i := 2; i < L && err == nil; i++ {
+					if AL := len(parts[i]); AL == 0 {
+						err = syntaxError("LDAPOID: encountered zero length arc")
+					} else if !isDigits(parts[i]) {
+						err = syntaxError("LDAPOID: arcs must be numerical and not negative")
+					} else if AL > 1 && bHasPfx(parts[i], []byte(`0`)) {
+						err = syntaxError("LDAPOID: arcs must be base10")
+					}
+				}
+			}
+			loid = b
+		}
+	}
+
+	return
+}
+
+// ensures first two arcs are not in an illegal state.
+func checkFirstArcs(a1, a2 []byte) (err error) {
+	var arc1, arc2 int
+	first := string(a1)
+	second := string(a2)
+	if arc1, err = atoi(first); err == nil {
+		if arc2, err = atoi(second); err == nil {
+			notNeg := arc1 >= 0 && arc2 >= 0
+			badArc2 := false
+			switch arc1 {
+			case 0, 1:
+				badArc2 = arc2 > 39
+			case 2:
+			default:
+				err = syntaxError("LDAPOID: illegal root arc '", first, "'")
+				return
+			}
+			if !notNeg {
+				err = syntaxError("LDAPOID: negative arc(s) detected")
+			} else if badArc2 {
+				err = syntaxError("LDAPOID: illegal second arc (>39)")
+			}
+		}
+	}
+	return
+}
+
+func isNumericOID(x any) bool {
+	_, err := marshalLDAPOID(x)
+	return err == nil
+}
+
+func (r LDAPOID) String() string { return string(r) }
+
+func (r LDAPOID) Encode() ([]byte, error) {
+	return OctetString(r).Encode()
+}
+
+func (r *LDAPOID) Decode(enc []byte) error {
+	var dec OctetString
+	err := dec.Decode(enc)
+	if err == nil {
+		*r = LDAPOID(dec)
+	}
+	return err
+}
 
 /*
 ObjectIdentifier implements an unbounded ASN.1 OBJECT IDENTIFIER (tag 6),
@@ -79,10 +184,15 @@ func oID(x any) (result bool, err error) {
 	case []byte:
 		result, err = oID(string(tv))
 	case string:
-		// try descriptor first
-		if _, err = isDescr(tv); err != nil {
-			// fallback to numeric oid
-			_, err = NewObjectIdentifier(tv)
+		if len(tv) == 0 {
+			err = syntaxError("Invalid ObjectIdentifier syntax")
+			break
+		}
+		switch {
+		case isDigit(rune(tv[0])):
+			_, err = marshalLDAPOID(tv)
+		case isAlpha(rune(tv[0])):
+			_, err = isDescr(tv)
 		}
 		result = err == nil
 	case ObjectIdentifier:
@@ -116,8 +226,8 @@ func isDescr(val string) (result bool, err error) {
 	}
 
 	L := len(val) - 1
-	if rune(val[L]) == '-' {
-		err = syntaxError("OID descriptor cannot end in a hyphen")
+	if !isAlnum(rune(val[L])) {
+		err = syntaxError("OID descriptor must end with an alphanumeric")
 		return
 	}
 
@@ -142,7 +252,7 @@ func isDescr(val string) (result bool, err error) {
 			}
 			lastHyphen = true
 		default:
-			err = syntaxError("invalid character for OID descriptor: (none of [a-zA-Z0-9\\-])")
+			err = syntaxError("OID descriptor contains invalid character: want [a-zA-Z0-9\\-], got ", string(ch))
 		}
 	}
 
@@ -999,8 +1109,12 @@ var (
 func init() {
 	OIDMap = make(map[string][]string)
 	for _, slices := range [][]string{
+		{`0.9.2342.19200300.100.1.1`, `uid`, `userId`},
+		{`0.9.2342.19200300.100.1.25`, `dc`, `domainComponent`},
 		{`2.5.4.3`, `cn`, `commonName`},
 		{`2.5.4.6`, `c`, `countryName`},
+		{`2.5.4.7`, `l`, `localityName`},
+		{`2.5.4.9`, `street`, `streetAddress`},
 		{`2.5.4.10`, `o`, `organizationName`},
 		{`2.5.4.11`, `ou`, `organizationUnitName`},
 		{`2.5.4.33`, `st`, `stateOrProvinceName`},

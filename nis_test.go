@@ -1,6 +1,55 @@
 package syntax
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func ExampleNetgroupTriple_roundTripDER() {
+	ngt := NetgroupTriple{
+		Hostname: IA5String("localhost"),
+		Username: IA5String("jesse"),
+		Domain:   IA5String("example.com"),
+	}
+
+	enc, err := ngt.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec NetgroupTriple
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: (localhost,jesse,example.com)
+}
+
+func ExampleBootParameter_roundTripDER() {
+	bp := BootParameter{
+		Key:    IA5String("abc123"),
+		Server: IA5String("localhost"),
+		Path:   IA5String("/path/to/something"),
+	}
+
+	enc, err := bp.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec BootParameter
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(dec)
+	// Output: abc123=localhost:/path/to/something
+}
 
 func TestNetgroupTriple(t *testing.T) {
 	for idx, raw := range []string{

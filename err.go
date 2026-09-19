@@ -19,10 +19,17 @@ func syntaxError(msg ...string) error {
 	return common.LDAPResultInvalidAttributeSyntax.New(msg...)
 }
 
+// non-asn1 encoding errors
+func encodingError(msg ...string) error {
+	return common.LDAPResultOther.New(msg...)
+}
+
 func asn1Error(msg ...string) error {
 	m := append([]string{"ASN.1 "}, msg...)
-	return common.LDAPResultOther.New(m...)
+	return common.ErrorASN1.New(m...)
 }
+
+func zeroE(err error) bool { return common.ZeroError(err) }
 
 func setDiag(err error, msg ...string) error {
 	if is, ok := err.(common.Error); ok {

@@ -1,10 +1,75 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
 
-func TestSubstringAssertion(t *testing.T) {
+func ExampleSubstrings_roundTripBER() {
+	sub, err := NewSubstrings(`substring*substring*substring`)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var enc []byte
+	if enc, err = sub.Encode(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec Substrings
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%v\n", dec)
+	// Output: substring*substring*substring
+}
+
+func ExampleSubstringAny_roundTripBER() {
+	Any := SubstringAny{
+		AssertionValue{0x73, 0x75, 0x62, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67},
+		AssertionValue{0x73, 0x75, 0x62, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67},
+	}
+
+	enc, err := Any.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec SubstringAny
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s\n", dec)
+	// Output: [substring substring]
+}
+
+func ExampleSubstringInitial_roundTripBER() {
+	Sub := SubstringInitial{0x73, 0x75, 0x62, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67}
+
+	enc, err := Sub.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec SubstringInitial
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s\n", dec)
+	// Output: substring
+}
+
+func TestSubstrings(t *testing.T) {
 	for idx, raw := range []string{
 		`substring*substring`,
 		`substri*ng*thing`,
@@ -14,7 +79,7 @@ func TestSubstringAssertion(t *testing.T) {
 		`subst*`,
 		`*ubstr`,
 	} {
-		if ssa, err := NewSubstringAssertion(raw); err != nil {
+		if ssa, err := NewSubstrings(raw); err != nil {
 			t.Errorf("%s[%d] failed: %v", t.Name(), idx, err)
 		} else if got := ssa.String(); got != raw {
 			t.Errorf("%s[%d] failed:\n\twant:%s\n\tgot: %s\n",
@@ -23,81 +88,7 @@ func TestSubstringAssertion(t *testing.T) {
 	}
 }
 
-func TestSubstringAssertion_codecov(t *testing.T) {
-	substrProcess1([]byte(`11*11`))
-	substrProcess1([]byte(`aaaa`))
-	substrProcess1([]byte(`  `))
-	substrProcess2([]byte(`11*11`))
-	substrProcess2([]byte(`nil`))
-	substrProcess2([]byte(`  `))
-	substrProcess2([]byte(`aaaa`))
-	substrProcess3([]byte(`11*11`))
-	substrProcess3([]byte(`  `))
-	substrProcess3([]byte(`aaaa`))
-	substrProcess4([]byte(`11*11`))
-	substrProcess4([]byte(`aaaa`))
-	substrProcess4([]byte(`    `))
-
-	prepareStringListAssertion([]string{`ahch`, `helkl4`}, `h*lk*4`)
-
-	assertSubstringAssertion(SubstringAssertion{})
-	substringAssertion(`aa*a`)
-	substrProcess1([]byte(`aa*a`))
-	substrProcess2([]byte(`aa*a`))
-	substrProcess3([]byte(`aa*a`))
-	substrProcess4([]byte(`aa*a`))
-
-	marshalSubstringAssertion(nil)
-	marshalSubstringAssertion(``)
-	marshalSubstringAssertion([]byte{})
-	marshalSubstringAssertion(`thisis**bogus`)
-
-	substringsMatch("strXXXX", "*XXX", true)
-	substringsMatch("strXXXX", "str*XXX*", true)
-	substringsMatch("strXXXX", "str*XXX", true)
-	substringsMatch("strXXXX", "*trXXXX", true)
-
-	b, err := caseIgnoreSubstringsMatch(`this is a substring`, `this is*a*substring`)
-	if err != nil {
-		t.Errorf("%s failed: %v", t.Name(), err)
-		return
-	} else if !b {
-		t.Errorf("%s failed:\nwant: TRUE\ngot:  %t", t.Name(), b)
-		return
-	}
-
-	_, _ = caseIgnoreSubstringsMatch(``, `This*isa*Substring`)
-	_, _ = caseIgnoreSubstringsMatch(``, `ThisisaSubstring`)
-	_, _ = caseIgnoreSubstringsMatch(`this*isa*substring`, ``)
-	_, _ = caseIgnoreSubstringsMatch(`this*isa*substring`, `banana`)
-
-	b, err = caseExactSubstringsMatch(`this*isa*substring`, `This*isa*Substring`)
-	if err != nil {
-		t.Errorf("%s failed: %v", t.Name(), err)
-		return
-	} else if b {
-		t.Errorf("%s failed:\nwant: FALSE\ngot:  %t", t.Name(), b)
-		return
-	}
-
-	_, _ = caseExactSubstringsMatch(``, `This*isa*Substring`)
-	_, _ = caseExactSubstringsMatch(``, `ThisisaSubstring`)
-	_, _ = caseExactSubstringsMatch(`this*isa*substring`, ``)
-	_, _ = caseExactSubstringsMatch(`this*isa*substring`, `banana`)
-	_, _ = caseExactSubstringsMatch(`this*isa*substring`, SubstringAssertion{
-		Initial: AssertionValue([]byte{0x1, 0x2}),
-		Final:   AssertionValue([]byte{0x1, 0x2}),
-	})
-	_, _ = caseExactSubstringsMatch(`this*isa*substring`, SubstringAssertion{
-		Initial: AssertionValue([]byte{0x1, 0x2}),
-		Any:     AssertionValue([]byte(`is*not*subs*ring`)),
-		Final:   AssertionValue([]byte{0x1, 0x2}),
-	})
-
-	caseIgnoreListSubstringsMatch([]string{`ahch`, `helkl4`}, `h*lk*4`)
-}
-
-func BenchmarkNewSubstringAssertion(b *testing.B) {
+func BenchmarkNewSubstrings(b *testing.B) {
 	b.StopTimer()
 	assn := [][]byte{
 		[]byte(`+1*555*134`),
@@ -114,10 +105,9 @@ func BenchmarkNewSubstringAssertion(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = NewSubstringAssertion(assn[i%maxIdx])
+		_, _ = NewSubstrings(assn[i%maxIdx])
 	}
 }
-
 func BenchmarkSubstringMatch(b *testing.B) {
 	match := []byte(`substring`)
 	b.StopTimer()

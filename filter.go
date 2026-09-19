@@ -74,10 +74,10 @@ func marshalFilter(x any) (f Filter, err error) {
 }
 
 /*
-Filter implements [Section 2] and [Section 3] of RFC4515.
+Filter implements [§ 2] and [§ 3] of RFC4515.
 
-[Section 2]: https://datatracker.ietf.org/doc/html/rfc4515#section-2
-[Section 3]: https://datatracker.ietf.org/doc/html/rfc4515#section-3
+[§ 2]: https://datatracker.ietf.org/doc/html/rfc4515#section-2
+[§ 3]: https://datatracker.ietf.org/doc/html/rfc4515#section-3
 */
 type Filter interface {
 	// Index returns the Nth slice index found within
@@ -99,6 +99,14 @@ type Filter interface {
 	// intended as a convenient alternative to type
 	// assertion checks.
 	Choice() string
+
+	// Tag returns the integer form of the CHOICE of
+	// Filter. This is used for ASN.1 encoding.
+	Tag() int
+
+	// Encode returns the ASN.1 encoding for the receiver
+	// instance alongside an error.
+	Encode() ([]byte, error)
 
 	// Len returns the integer length of the receiver
 	// instance. This is only useful if the receiver is
@@ -169,20 +177,13 @@ type AttributeValueAssertion struct {
 }
 
 /*
-AttributeDescription implements [Section 2.5 of RFC4512].
-
-[Section 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
-*/
-type AttributeDescription []byte
-
-/*
 FilterPresent implements the "present" CHOICE of an instance of [Filter].
 */
 type FilterPresent struct {
 	Desc AttributeDescription
 }
 
-type MatchingRuleID []byte
+type MatchingRuleID LDAPString
 
 /*
 FilterExtensibleMatch aliases the [MatchingRuleAssertion] to implement
@@ -203,7 +204,7 @@ type MatchingRuleAssertion struct {
 	MatchingRule MatchingRuleID       `asn1:"tag:1,optional"`
 	Type         AttributeDescription `asn1:"tag:2,optional"`
 	MatchValue   AssertionValue       `asn1:"tag:3"`
-	DNAttributes bool                 `asn1:"tag:4,default:false"`
+	DNAttributes Boolean              `asn1:"tag:4,default:false"`
 }
 
 /*
@@ -211,7 +212,7 @@ FilterSubstrings implements the "substrings" CHOICE of an instance of [Filter].
 */
 type FilterSubstrings struct {
 	Type       AttributeDescription
-	Substrings SubstringAssertion
+	Substrings Substrings
 }
 
 /*
@@ -232,7 +233,13 @@ func (r FilterApproximateMatch) isFilter() {}
 func (r FilterGreaterOrEqual) isFilter()   {}
 func (r FilterLessOrEqual) isFilter()      {}
 
-func (r invalidFilter) IsZero() bool { return true }
+func (_ invalidFilter) IsZero() bool { return true }
+func (_ invalidFilter) Encode() ([]byte, error) {
+	return nil, errors.New("Cannot encode invalid Filter")
+}
+func (_ invalidFilter) Decode(_ []byte) error {
+	return errors.New("Cannot decode invalid Filter")
+}
 
 /*
 IsZero returns a Boolean value indicative of a nil receiver state.
@@ -291,7 +298,7 @@ IsZero returns a Boolean value indicative of a nil receiver state.
 */
 func (r FilterSubstrings) IsZero() bool {
 	return len(r.Type) == 0 &&
-		r.Substrings.IsZero()
+		len(r.Substrings) == 0
 }
 
 /*
@@ -301,7 +308,7 @@ func (r FilterExtensibleMatch) IsZero() bool {
 	return len(r.MatchingRule) == 0 &&
 		len(r.Type) == 0 &&
 		len(r.MatchValue) == 0 &&
-		!r.DNAttributes
+		!bool(r.DNAttributes)
 }
 
 /*
@@ -351,9 +358,8 @@ func (r FilterNot) Index(idx int) (f Filter) {
 Index returns an invalid [Filter] instance. This method only exists to
 satisfy Go's interface signature requirement.
 */
-func (r invalidFilter) Index(_ int) (f Filter) {
-	f = invalidFilter{}
-	return
+func (r invalidFilter) Index(_ int) Filter {
+	return r
 }
 
 /*
@@ -458,16 +464,6 @@ func (r FilterExtensibleMatch) Index(_ int) (f Filter) {
 String returns a zero string.
 */
 func (r invalidFilter) String() string { return `` }
-
-/*
-String returns the string representation of the receiver instance.
-*/
-func (r AttributeDescription) String() string { return string(r) }
-
-/*
-Type returns only the "descr" string value of the receiver instance.
-*/
-func (r AttributeDescription) Type() string { return r.String() }
 
 /*
 String returns the string representation of the receiver instance.
@@ -806,11 +802,23 @@ single value.
 */
 func (r FilterExtensibleMatch) Len() int { return 1 }
 
+func (_ FilterAnd) Tag() int              { return tagFilterAnd }
+func (_ FilterOr) Tag() int               { return tagFilterOr }
+func (_ FilterNot) Tag() int              { return tagFilterNot }
+func (_ FilterEqualityMatch) Tag() int    { return tagFilterEqualityMatch }
+func (_ FilterSubstrings) Tag() int       { return tagFilterSubstrings }
+func (_ FilterGreaterOrEqual) Tag() int   { return tagFilterGreaterOrEqual }
+func (_ FilterLessOrEqual) Tag() int      { return tagFilterLessOrEqual }
+func (_ FilterPresent) Tag() int          { return tagFilterPresent }
+func (_ FilterApproximateMatch) Tag() int { return tagFilterApproxMatch }
+func (_ FilterExtensibleMatch) Tag() int  { return tagFilterExtensibleMatch }
+func (_ invalidFilter) Tag() int          { return tagFilterInvalid }
+
 func (r MatchingRuleAssertion) IsZero() bool {
 	return len(r.MatchingRule) == 0 &&
 		len(r.Type) == 0 &&
 		len(r.MatchValue) == 0 &&
-		!r.DNAttributes
+		!bool(r.DNAttributes)
 }
 
 func parseSubFilter(input []byte) (f Filter, err error) {
@@ -930,8 +938,8 @@ func parseItemFilter(input []byte) (f Filter, err error) {
 			AttributeDescription(pre[:len(pre)-1]),
 			AssertionValue(after)}
 	} else if bytes.Contains(after, []byte("*")) {
-		var ssa SubstringAssertion
-		if ssa, err = NewSubstringAssertion(after); err == nil {
+		var ssa Substrings
+		if ssa, err = NewSubstrings(after); err == nil {
 			err = checkFilterOIDs(pre, []byte(``))
 			f = FilterSubstrings{
 				Type:       AttributeDescription(pre),
@@ -1023,17 +1031,15 @@ func checkParenBalanced(x []byte) bool {
 
 func checkFilterOIDs(t, m []byte) (err error) {
 	if len(t) > 0 {
-		if bytes.Contains(t, []byte(`;`)) {
-			err = errors.New("Invalid OID or descriptor (tags are prohibited): " + string(t))
-			return
-		} else if !isOIDOrDescr(t) {
-			err = errors.New("Invalid OID or descriptor: " + string(t))
+		tsp := bytes.Split(t, []byte(`;`)) // disregard tags for OID resolution
+		if !isOIDOrDescr(tsp[0]) {
+			err = syntaxError("Filter: invalid OID or descriptor: '", string(t), "'")
 			return
 		}
 	}
 	if len(m) > 0 {
 		if !isOIDOrDescr(m) {
-			err = errors.New("Invalid OID or descriptor: " + string(m))
+			err = syntaxError("Filter: invalid OID or descriptor: '", string(m), "'")
 		}
 	}
 
@@ -1206,6 +1212,10 @@ func assertString(x any, min int, name string) (str string, err error) {
 }
 */
 
+/*
+refinementToFilter returns an EQUALITY-focused instance of Filter
+based on the contents of the input Refinement instance.
+*/
 func refinementToFilter(r Refinement) (f Filter) {
 	if r == nil {
 		f = DefaultFilter
@@ -1242,6 +1252,35 @@ const (
 	tagMatchingRuleAssertionMatchValue   = 3
 	tagMatchingRuleAssertionDnAttributes = 4
 )
+
+/*
+Context tags per § 2 of RFC 4515:
+
+	Filter ::= CHOICE {
+	    and                [0] SET SIZE (1..MAX) OF filter Filter,
+	    or                 [1] SET SIZE (1..MAX) OF filter Filter,
+	    not                [2] Filter,
+	    equalityMatch      [3] AttributeValueAssertion,
+	    substrings         [4] SubstringFilter,
+	    greaterOrEqual     [5] AttributeValueAssertion,
+	    lessOrEqual        [6] AttributeValueAssertion,
+	    present            [7] AttributeDescription,
+	    approxMatch        [8] AttributeValueAssertion,
+	    extensibleMatch    [9] MatchingRuleAssertion }
+*/
+const (
+	tagFilterAnd             = iota // 0
+	tagFilterOr                     // 1
+	tagFilterNot                    // 2
+	tagFilterEqualityMatch          // 3
+	tagFilterSubstrings             // 4
+	tagFilterGreaterOrEqual         // 5
+	tagFilterLessOrEqual            // 6
+	tagFilterPresent                // 7
+	tagFilterApproxMatch            // 8
+	tagFilterExtensibleMatch        // 9
+)
+const tagFilterInvalid = -1
 
 var (
 	endOfFilterErr    error = errors.New("Unexpected end of filter")

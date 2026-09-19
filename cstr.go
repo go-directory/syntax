@@ -20,7 +20,7 @@ type CountryString []byte
 /*
 String returns the string representation of the receiver instance.
 */
-func (r CountryString) String() string { return string(r) }
+func (r CountryString) String() string { return b2s(r) }
 
 /*
 IsZero returns a Boolean value indicative of a nil receiver state.
@@ -58,7 +58,7 @@ func marshalCountryString(x any) (cs CountryString, err error) {
 	switch tv := x.(type) {
 	case string:
 		err = badLen(len(tv))
-		raw = []byte(tv)
+		raw = s2b(tv)
 	case []byte:
 		err = badLen(len(tv))
 		raw = tv

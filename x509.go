@@ -19,10 +19,11 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 		return asn1.TLV{}, 0, errShortDER
 	}
 
-	tag := b[0]
-	class := tag & 0xC0
-	constructed := (tag & 0x20) != 0
-	tagNum := tag & 0x1F
+	tagByte := b[0]
+
+	class := int((tagByte & 0xC0) >> 6)
+	constructed := (tagByte & 0x20) != 0
+	tagNum := int(tagByte & 0x1F)
 
 	if tagNum == 0x1F {
 		return asn1.TLV{}, 0, errHighTag
@@ -56,8 +57,8 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 
 	val := b[offset : offset+length]
 	tlv := asn1.TLV{
-		Tag:         tagNum,
-		Class:       class,
+		Tag:         byte(tagNum),
+		Class:       byte(class),
 		Constructed: constructed,
 		Length:      length,
 		Value:       val,
@@ -215,18 +216,26 @@ func NewCertificateAssertion(b []byte) (CertificateAssertion, error) {
 		return ca, errNotSeq
 	}
 
-	for _, c := range tlv.Children {
-		switch {
-		case c.Class == asn1.TagContextSpecific && c.Tag == 0:
-			ca.IssuerDER = c.Value
-		case c.Class == asn1.TagContextSpecific && c.Tag == 1:
-			ca.SerialDER = c.Value
-		case c.Class == asn1.TagContextSpecific && c.Tag == 2:
-			ca.SubjectDER = c.Value
-		}
+	if len(tlv.Children) < 3 {
+		return ca, errNotSeq
 	}
 
+	ca.IssuerDER = tlv.Children[0].Value
+	ca.SerialDER = tlv.Children[1].Value
+	ca.SubjectDER = tlv.Children[2].Value
+
 	return ca, nil
+}
+
+func stripInnerOctet(v []byte) []byte {
+	if len(v) >= 2 && v[0] == asn1.TagOctetString {
+		p := 0
+		_, payload, err := asn1.ReadConstructedTLV(v, &p)
+		if err == nil {
+			return payload
+		}
+	}
+	return v
 }
 
 func certificateAssertion(x any) (result bool, err error) {
@@ -259,13 +268,9 @@ func NewCRLAssertion(b []byte) (CRLAssertion, error) {
 		return ca, errNotSeq
 	}
 
-	for _, c := range tlv.Children {
-		if c.Class == asn1.TagContextSpecific && c.Tag == 0 {
-			ca.IssuerDER = c.Value
-		}
-	}
+	ca.IssuerDER = tlv.Children[0].Value
 
-	return ca, err
+	return ca, nil
 }
 
 func cRLAssertion(x any) (result bool, err error) {
@@ -318,28 +323,30 @@ func NewCertificatePair(b []byte) (CertificatePair, error) {
 	var (
 		tlv asn1.TLV
 		err error
-		cpr CertificatePair
+		cp  CertificatePair
 	)
 
 	if tlv, _, err = parseX509(b); err != nil {
-		return cpr, err
+		return cp, err
 	}
 
 	if tlv.Tag != 0x10 || !tlv.Constructed {
-		err = errNotSeq
-		return cpr, err
+		return cp, errNotSeq
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.TagContextSpecific && c.Tag == 0 && c.Constructed {
-			cpr.ForwardDER = c.Children[0].Value
+		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && c.Constructed {
+			// [0] -> SEQUENCE -> OCTET STRING
+			inner := c.Children[0].Children[0] // Tag=0x4, Length=1, Value={0xaa}
+			cp.ForwardDER = append([]byte{inner.Tag, byte(inner.Length)}, inner.Value...)
 		}
-		if c.Class == asn1.TagContextSpecific && c.Tag == 1 && c.Constructed {
-			cpr.ReverseDER = c.Children[0].Value
+		if c.Class == asn1.ClassContextSpecific && c.Tag == 1 && c.Constructed {
+			inner := c.Children[0].Children[0] // Tag=0x4, Length=1, Value={0xbb}
+			cp.ReverseDER = append([]byte{inner.Tag, byte(inner.Length)}, inner.Value...)
 		}
 	}
 
-	return cpr, err
+	return cp, nil
 }
 
 func certificatePair(x any) (result bool, err error) {
@@ -372,10 +379,10 @@ func NewCertificatePairAssertion(b []byte) (CertificatePairAssertion, error) {
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.TagContextSpecific && c.Tag == 0 && !c.Constructed {
+		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && !c.Constructed {
 			cpa.ForwardDER = c.Value
 		}
-		if c.Class == asn1.TagContextSpecific && c.Tag == 1 && !c.Constructed {
+		if c.Class == asn1.ClassContextSpecific && c.Tag == 1 && !c.Constructed {
 			cpa.ReverseDER = c.Value
 		}
 	}
@@ -440,7 +447,7 @@ func NewCertificateListAssertion(b []byte) (CertificateListAssertion, error) {
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.TagContextSpecific && c.Tag == 0 && !c.Constructed {
+		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && !c.Constructed {
 			a.IssuerDER = c.Value
 		}
 	}

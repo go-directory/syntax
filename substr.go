@@ -6,8 +6,11 @@ substr.go implements the substring assertion type.
 
 import (
 	"bytes"
+	"strconv"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/go-directory/encoding/asn1"
 )
 
 const (
@@ -17,7 +20,7 @@ const (
 )
 
 /*
-SubstringAssertion implements the Substring Assertion.
+Substrings implements the Substring Assertion.
 
 From [§ 3.3.30 of RFC 4517]:
 
@@ -52,77 +55,331 @@ From [§ 3 of RFC 4515]:
 	any     = ASTERISK *(assertionvalue ASTERISK)
 	final   = assertionvalue
 
+This interface type is implemented through [SubstringInitial], [SubstringAny]
+and [SubstringFinal] type instances.
+
+Instances of this type are created using the [NewSubstring] constructor.
+
 [§ 2 of RFC 4515]: https://datatracker.ietf.org/doc/html/rfc4515#section-2
 [§ 3 of RFC 4515]: https://datatracker.ietf.org/doc/html/rfc4515#section-3
 [§ 3.3.30 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-3.3.30
 */
-type SubstringAssertion struct {
-	Initial AssertionValue `asn1:"tag:0"`
-	Any     AssertionValue `asn1:"tag:1"`
-	Final   AssertionValue `asn1:"tag:2"`
+type Substring interface {
+	//String() string
+	Choice() string
+	Encode() ([]byte, error)
+	IsZero() bool
+	Tag() int
+	isSubstring()
 }
 
 /*
-IsZero returns a Boolean value indicative of a nil receiver state.
+Substrings implements slices of [Substring] instances. An instance of this
+type resides within the "Substrings" field of the [FilterSubstrings] type.
 */
-func (r SubstringAssertion) IsZero() bool {
-	return len(r.Initial) == 0 &&
-		len(r.Any) == 0 &&
-		len(r.Final) == 0
-}
+type Substrings []Substring
 
-/*
-String returns the string representation of the receiver instance.
-*/
-func (r SubstringAssertion) String() (s string) {
-	Any := func() string {
-		if len(r.Any) > 0 {
-			return `*` + r.Any.String() + `*`
+func (r Substrings) Encode() ([]byte, error) {
+	var payload []byte
+	var err error
+
+	for i := 0; i < len(r) && err == nil; i++ {
+		var enc []byte
+		switch v := r[i].(type) {
+		case SubstringInitial:
+			enc, err = v.Encode()
+		case SubstringFinal:
+			enc, err = v.Encode()
+		case SubstringAny:
+			enc, err = v.Encode()
+		default:
+			err = asn1Error("Substring: unknown CHOICE type")
 		}
-		return `*`
+		if err == nil {
+			payload = append(payload, enc...)
+		}
 	}
 
-	if !r.IsZero() {
-		bld := &bytes.Buffer{}
+	if err != nil {
+		return nil, err
+	}
 
-		if len(r.Initial) > 0 {
-			bld.Write(r.Initial)
-			bld.WriteString(Any())
-			if len(r.Final) > 0 {
-				bld.Write(r.Final)
+	out := asn1.WriteConstructedTLV(
+		nil,
+		asn1.ClassUniversal,
+		true,
+		uint32(asn1.TagSequence),
+		payload,
+	)
+
+	return out, nil
+}
+
+func (r *Substrings) Decode(enc []byte) error {
+	p := 0
+
+	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
+		asn1.ClassUniversal, uint32(asn1.TagSequence))
+
+	if err != nil {
+		return err
+	}
+
+	p2 := 0
+	var Init SubstringInitial
+	var Final SubstringFinal
+	var Any SubstringAny
+	for p2 < len(payload) && err == nil {
+		var childTag asn1.Tag
+		var childPayload []byte
+
+		childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2)
+		if err != nil {
+			break
+		}
+
+		if first := childPayload[0]; first != asn1.TagOctetString {
+			err = asn1Error("Substring: unexpected tag ",
+				strconv.Itoa(int(first)))
+			break
+		}
+
+		var dec OctetString
+		switch childTag.Tag {
+		case uint32(tagSubstringInitial):
+			err = dec.Decode(childPayload)
+			Init = SubstringInitial(dec)
+
+		case uint32(tagSubstringAny):
+			err = dec.Decode(childPayload)
+			Any = append(Any, AssertionValue(dec))
+
+		case uint32(tagSubstringFinal):
+			err = dec.Decode(childPayload)
+			Final = SubstringFinal(dec)
+
+		default:
+			err = asn1Error("Substring: unexpected tag ",
+				strconv.Itoa(int(childTag.Tag)))
+		}
+	}
+
+	if err == nil {
+		if len(Init) > 0 {
+			*r = append(*r, Init)
+		}
+		*r = append(*r, Any)
+		if len(Final) > 0 {
+			*r = append(*r, Final)
+		}
+	}
+
+	return err
+}
+
+/*
+SubstringInitial implements the "initial" CHOICE of an instance of [Substring].
+*/
+type SubstringInitial AssertionValue
+
+/*
+SubstringFinal implements the "final" CHOICE of an instance of [Substring].
+*/
+type SubstringFinal AssertionValue
+
+/*
+SubstringAny implements the "any" CHOICE of an instance of [Substring].
+*/
+type SubstringAny []AssertionValue
+
+func (r SubstringInitial) IsZero() bool { return len(r) == 0 }
+func (r SubstringFinal) IsZero() bool   { return len(r) == 0 }
+func (r SubstringAny) IsZero() bool     { return len(r) == 0 }
+
+func (r SubstringAny) Encode() ([]byte, error) {
+	payload := make([]byte, 0)
+
+	var err error
+	for i := 0; i < len(r) && err == nil; i++ {
+		var enc []byte
+		enc, err = OctetString(r[i]).Encode()
+		payload = append(payload, enc...)
+	}
+
+	var out []byte
+	if err == nil {
+		out = asn1.WriteConstructedTLV(
+			nil,
+			asn1.ClassContextSpecific,
+			true,
+			uint32(r.Tag()),
+			payload,
+		)
+	}
+
+	return out, err
+}
+
+func (r *SubstringAny) Decode(enc []byte) error {
+	p := 0
+
+	tag, payload, err := asn1.ReadConstructedTLV(enc, &p)
+	if err != nil {
+		return err
+	}
+
+	if err = tag.Expect(asn1.ClassContextSpecific, true, uint32(r.Tag())); err != nil {
+		return err
+	}
+
+	p2 := 0
+	for p2 < len(payload) && err == nil {
+		var childTag asn1.Tag
+		var childPayload []byte
+		if childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
+			if childTag.Tag != uint32(asn1.TagOctetString) {
+				err = asn1Error("Substring.Any Assertion Value: want %d, got %d",
+					strconv.Itoa(int(asn1.TagOctetString)),
+					strconv.Itoa(int(childTag.Tag)))
+				break
 			}
-		} else if len(r.Final) > 0 {
-			bld.WriteString(Any())
-			bld.Write(r.Final)
-		} else {
-			// If a star is the only value,
-			// don't save anything.
-			bld.WriteString(Any())
+			*r = append(*r, AssertionValue(childPayload))
 		}
+	}
 
-		s = bld.String()
+	return err
+}
+
+func (r SubstringInitial) Encode() ([]byte, error) {
+	return encodeSubstringInitOrFinal(r)
+}
+
+func (r SubstringFinal) Encode() ([]byte, error) {
+	return encodeSubstringInitOrFinal(r)
+}
+
+func encodeSubstringInitOrFinal(x Substring) (out []byte, err error) {
+	var enc []byte
+	switch tv := x.(type) {
+	case SubstringInitial:
+		enc, err = OctetString(tv).Encode()
+	case SubstringFinal:
+		enc, err = OctetString(tv).Encode()
+	}
+
+	out = asn1.WriteConstructedTLV(
+		nil,
+		asn1.ClassContextSpecific,
+		false,
+		uint32(x.Tag()),
+		enc)
+
+	return out, err
+}
+
+func (r *SubstringInitial) Decode(enc []byte) error {
+	sub, err := decodeSubstringInitOrFinal(enc)
+	if err == nil {
+		*r = SubstringInitial(sub.(SubstringInitial))
+	}
+	return err
+}
+
+func (r *SubstringFinal) Decode(enc []byte) error {
+	sub, err := decodeSubstringInitOrFinal(enc)
+	if err == nil {
+		*r = SubstringFinal(sub.(SubstringFinal))
+	}
+	return err
+}
+
+func decodeSubstringInitOrFinal(enc []byte) (sub Substring, err error) {
+	p := 0
+
+	var tag asn1.Tag
+	var payload []byte
+
+	if tag, payload, err = asn1.ReadConstructedTLV(enc, &p); err == nil {
+		p2 := 0
+		var val []byte
+		if _, val, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
+			switch uint32(tag.Tag) {
+			case tagSubstringInitial:
+				if err == nil {
+					sub = SubstringInitial(val)
+				}
+			case tagSubstringFinal:
+				if err == nil {
+					sub = SubstringFinal(val)
+				}
+			default:
+				err = asn1Error("Substring: unexpected tag ", strconv.Itoa(int(tag.Tag)))
+			}
+		}
 	}
 
 	return
 }
 
-/*
-NewSubstringAssertion returns an error following an analysis of x
-in the context of a Substring Assertion.
-*/
-func NewSubstringAssertion(x any) (SubstringAssertion, error) {
-	return marshalSubstringAssertion(x)
+func (_ SubstringInitial) Tag() int { return tagSubstringInitial }
+func (_ SubstringFinal) Tag() int   { return tagSubstringFinal }
+func (_ SubstringAny) Tag() int     { return tagSubstringAny }
+
+func (_ SubstringInitial) Choice() string { return "initial" }
+func (_ SubstringFinal) Choice() string   { return "final" }
+func (_ SubstringAny) Choice() string     { return "any" }
+
+func (_ SubstringInitial) isSubstring() {}
+func (_ SubstringFinal) isSubstring()   {}
+func (_ SubstringAny) isSubstring()     {}
+
+func (r Substrings) String() string {
+	var init AssertionValue
+	var fin AssertionValue
+	var Any []AssertionValue
+
+	for _, s := range r {
+		switch v := s.(type) {
+		case SubstringInitial:
+			init = AssertionValue(v)
+		case SubstringFinal:
+			fin = AssertionValue(v)
+		case SubstringAny:
+			Any = v
+		}
+	}
+
+	if len(init) == 0 && len(fin) == 0 && len(Any) == 0 {
+		return ""
+	}
+
+	var b []byte
+
+	if len(init) > 0 {
+		b = append(b, init.Escaped()...)
+	}
+
+	if len(Any) == 0 {
+		b = append(b, '*')
+	} else {
+		b = append(b, '*')
+		for _, a := range Any {
+			b = append(b, a.Escaped()...)
+			b = append(b, '*')
+		}
+	}
+
+	if len(fin) > 0 {
+		b = append(b, fin.Escaped()...)
+	}
+
+	return string(b)
 }
 
-func substringAssertion(x any) (result bool, err error) {
-	_, err = marshalSubstringAssertion(x)
-	result = err == nil
-	return
-}
-
-func marshalSubstringAssertion(z any) (ssa SubstringAssertion, err error) {
+func marshalSubstrings(z any) (substrings Substrings, err error) {
 	var x []byte
-	if x, err = assertSubstringAssertion(z); err != nil {
+	x, err = assertSubstringAssertion(z)
+	if err != nil {
 		return
 	}
 
@@ -155,176 +412,19 @@ func marshalSubstringAssertion(z any) (ssa SubstringAssertion, err error) {
 		return
 	}
 
-	if f && l {
-		// Any only
-		ssa.Any, err = substrProcess1(x)
-	} else if f && !l {
-		// Final + Any
-		ssa.Any, ssa.Final, err = substrProcess2(x)
-	} else if !f && l {
-		// Initial + Any
-		ssa.Initial, ssa.Any, err = substrProcess3(x)
-	} else {
-		// Initial + Any + Final
-		ssa.Initial, ssa.Any, ssa.Final, err = substrProcess4(x)
-	}
-
-	return
-}
-
-func substrProcess1(x []byte) (a AssertionValue, err error) {
-	if len(x) < 2 {
-		err = errMinAster
-		return
-	}
-
-	z := x[1 : len(x)-1]
-
-	var buf []byte
-	start := 0
-
-	for idx := 0; idx < len(z); idx++ {
-		if z[idx] == '*' {
-			if start < idx {
-				buf = append(buf, z[start:idx]...)
-			}
-			start = idx + 1
-		}
-	}
-
-	if start < len(z) {
-		buf = append(buf, z[start:]...)
-	}
-
-	if err = assertionValueBytes(buf); err == nil {
-		a = AssertionValue(z)
-	}
-
-	return
-}
-
-func substrProcess2(x []byte) (a, f AssertionValue, err error) {
-	if len(x) < 2 {
-		err = errMinAster
-		return
-	}
-
-	z := x[1:]
 	var parts [][]byte
 	start := 0
 
-	for i := 0; i < len(z); i++ {
-		if z[i] == '*' {
-			seg := z[start:i]
-			if len(seg) > 0 {
+	for i, b := range x {
+		if b == '*' {
+			if start < i {
+				seg := x[start:i]
 				if err = assertionValueBytes(seg); err != nil {
 					return
 				}
 				parts = append(parts, seg)
-				start = i + 1
 			}
-		}
-	}
-
-	if start < len(z) {
-		seg := z[start:]
-		if err = assertionValueBytes(seg); err != nil {
-			return
-		}
-		parts = append(parts, seg)
-	}
-
-	if len(parts) == 0 {
-		err = errMinAster
-		return
-	}
-
-	if len(parts) == 1 {
-		f = AssertionValue(parts[0])
-	} else {
-		var buf bytes.Buffer
-		for i := 0; i < len(parts)-1; i++ {
-			if i > 0 {
-				buf.WriteByte('*')
-			}
-			buf.Write(parts[i])
-		}
-		a = AssertionValue(buf.Bytes())
-		f = AssertionValue(parts[len(parts)-1])
-	}
-
-	return
-}
-
-func substrProcess3(x []byte) (i, a AssertionValue, err error) {
-	if len(x) < 2 {
-		err = errMinAster
-		return
-	}
-
-	z := x[:len(x)-1]
-	var parts [][]byte
-	start := 0
-
-	for idx := 0; idx < len(z); idx++ {
-		if z[idx] == '*' {
-			seg := z[start:idx]
-			if len(seg) > 0 {
-				if err = assertionValueBytes(seg); err != nil {
-					return
-				}
-				parts = append(parts, seg)
-				start = idx + 1
-			}
-		}
-	}
-
-	if start < len(z) {
-		seg := z[start:]
-		if err = assertionValueBytes(seg); err != nil {
-			return
-		}
-		parts = append(parts, seg)
-	}
-
-	if len(parts) == 0 {
-		err = errMinAster
-		return
-	}
-
-	if len(parts) == 1 {
-		i = AssertionValue(parts[0])
-		return
-	}
-
-	i = AssertionValue(parts[0])
-
-	var buf bytes.Buffer
-	for idx := 1; idx < len(parts); idx++ {
-		if idx > 1 {
-			buf.WriteByte('*')
-		}
-		buf.Write(parts[idx])
-	}
-	a = AssertionValue(buf.Bytes())
-
-	return
-}
-
-func substrProcess4(x []byte) (i, a, f AssertionValue, err error) {
-	var parts [][]byte
-	start := 0
-
-	for idx := 0; idx < len(x); idx++ {
-		if x[idx] == '*' {
-			seg := x[start:idx]
-			if len(seg) > 0 {
-				if err = assertionValueBytes(seg); err != nil {
-					return
-				}
-				parts = append(parts, seg)
-				start = idx + 1
-			}
+			start = i + 1
 		}
 	}
 
@@ -336,26 +436,92 @@ func substrProcess4(x []byte) (i, a, f AssertionValue, err error) {
 		parts = append(parts, seg)
 	}
 
-	switch len(parts) {
-	case 0, 1:
+	if len(parts) == 0 {
 		err = errMinAster
-	case 2:
-		i = AssertionValue(parts[0])
-		f = AssertionValue(parts[1])
-	default:
-		i = AssertionValue(parts[0])
-
-		var buf bytes.Buffer
-		for idx := 1; idx < len(parts)-1; idx++ {
-			if idx > 1 {
-				buf.WriteByte('*')
-			}
-			buf.Write(parts[idx])
-		}
-		a = AssertionValue(buf.Bytes())
-		f = AssertionValue(parts[len(parts)-1])
+		return
 	}
 
+	substrings = getSubstringTokens(parts, f, l)
+
+	return
+}
+
+func getSubstringTokens(parts [][]byte, f, l bool) (substrings Substrings) {
+	var initVal, finalVal AssertionValue
+	var anyVals []AssertionValue
+
+	n := len(parts)
+
+	if !f && !l {
+		initVal = AssertionValue(parts[0])
+		if n > 1 {
+			finalVal = AssertionValue(parts[n-1])
+		}
+		if n > 2 {
+			anyVals = make([]AssertionValue, n-2)
+			for i := 1; i < n-1; i++ {
+				anyVals[i-1] = AssertionValue(parts[i])
+			}
+		}
+	} else if !f && l {
+		initVal = AssertionValue(parts[0])
+		if n > 1 {
+			anyVals = make([]AssertionValue, n-1)
+			for i := 1; i < n; i++ {
+				anyVals[i-1] = AssertionValue(parts[i])
+			}
+		}
+	} else if f && !l {
+		if n > 1 {
+			finalVal = AssertionValue(parts[n-1])
+			anyVals = make([]AssertionValue, n-1)
+			for i := 0; i < n-1; i++ {
+				anyVals[i] = AssertionValue(parts[i])
+			}
+		} else {
+			finalVal = AssertionValue(parts[0])
+		}
+	} else {
+		anyVals = make([]AssertionValue, n)
+		for i := 0; i < n; i++ {
+			anyVals[i] = AssertionValue(parts[i])
+		}
+	}
+
+	substrings = buildSubstrings(initVal, finalVal, anyVals)
+	return
+}
+
+func buildSubstrings(
+	initVal, finalVal AssertionValue,
+	anyVals []AssertionValue,
+) (substrings Substrings) {
+	substrings = make(Substrings, 0, 3)
+
+	if len(initVal) > 0 {
+		substrings = append(substrings, SubstringInitial(initVal))
+	}
+
+	substrings = append(substrings, SubstringAny(anyVals))
+
+	if len(finalVal) > 0 {
+		substrings = append(substrings, SubstringFinal(finalVal))
+	}
+
+	return
+}
+
+/*
+NewSubstrings returns an instance of [Substrings] alongside an
+error following an attempt to marshal x.
+*/
+func NewSubstrings(x any) (Substrings, error) {
+	return marshalSubstrings(x)
+}
+
+func substringAssertion(x any) (result bool, err error) {
+	_, err = marshalSubstrings(x)
+	result = err == nil
 	return
 }
 
@@ -365,7 +531,7 @@ func assertSubstringAssertion(x any) (value []byte, err error) {
 		value = []byte(tv)
 	case []byte:
 		value = tv
-	case SubstringAssertion:
+	case Substrings:
 		value = []byte(tv.String())
 	default:
 		err = errorBadType("SubstringAssertion")
@@ -454,7 +620,7 @@ func assertionValueBytes(raw []byte) (err error) {
 /*
 AssertionValue implements an OCTET STRING value.
 */
-type AssertionValue []byte
+type AssertionValue OctetString
 
 /*
 Set assigns x to the receiver instance.

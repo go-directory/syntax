@@ -558,7 +558,7 @@ From [Appendix A of RFC 3672]:
 	id-or       = %x6F.72       ; "or"
 	id-not      = %x6E.6F.74    ; "not"
 
-From [ITU-T Rec. X.501 clause 12.3.5]:
+From [§ 12.3.5 of ITU-T Rec. X.501]:
 
 	Refinement ::= CHOICE {
 		item [0] OBJECT-CLASS.&id,
@@ -567,7 +567,9 @@ From [ITU-T Rec. X.501 clause 12.3.5]:
 		not  [3] Refinement,
 		... }
 
-[ITU-T Rec. X.501 clause 12.3.5]: https://www.itu.int/rec/T-REC-X.501
+The [RefinementItem] component(s) in a [Refinement] each bear a single Object Class, whether by numeric OID or descriptor. Any KIND of Object Class is permitted.
+
+[§ 12.3.5 of ITU-T Rec. X.501]: https://www.itu.int/rec/T-REC-X.501
 [Appendix A of RFC 3672]: https://datatracker.ietf.org/doc/html/rfc3672#appendix-A
 */
 type Refinement interface {
