@@ -229,9 +229,14 @@ func (r *PartialAttribute) Decode(enc []byte) error {
 }
 
 /*
+	AttributeSelection ::= SEQUENCE OF selector LDAPString
+
 AttributeSelection implements [§ 4.5.1.8 of RFC 4511] to serve as a slice
 type of [LDAPString] instances. Normally, instances of this type are used
 by a client to control which attribute types are to be sent over the wire.
+
+Note that the [LDAPString] is constrained to "attributeSelector" per [§
+4.5.1.8 of RFC 4511].
 
 [§ 4.5.1.8 of RFC 4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.5.1.8
 */
