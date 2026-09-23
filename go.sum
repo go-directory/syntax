@@ -2,5 +2,9 @@ github.com/go-directory/common v0.0.0-20260914190422-b244c6ff2f87 h1:mI0cP7q6AoQ
 github.com/go-directory/common v0.0.0-20260914190422-b244c6ff2f87/go.mod h1:38wymd8zkOxcZC/oRKK8a82xopDQRSz42XTd97NKgqg=
 github.com/go-directory/encoding v0.0.0-20260919011600-1009bf2f8a5d h1:wLSejESQ0BArJqaSAydYWa/3DcVGlx+4kLWx3aRZL0A=
 github.com/go-directory/encoding v0.0.0-20260919011600-1009bf2f8a5d/go.mod h1:SK7qtKZ4th6D8O4x0cOgrYOOrkMyq9BmeFtiqrchmls=
+github.com/go-directory/encoding v0.0.0-20260919203334-74be31c117a3 h1:/mx3stlxL+GeWTlOPFGev7pS9g6Ytc9c9u+xV7vMLGw=
+github.com/go-directory/encoding v0.0.0-20260919203334-74be31c117a3/go.mod h1:SK7qtKZ4th6D8O4x0cOgrYOOrkMyq9BmeFtiqrchmls=
+github.com/go-directory/encoding v0.0.0-20260922012141-7f5d192f0fc1 h1:23BkQ8i4HOYFKzAhNBQgSnsToDF4Mdt7T/VIz4kxNZ0=
+github.com/go-directory/encoding v0.0.0-20260922012141-7f5d192f0fc1/go.mod h1:SK7qtKZ4th6D8O4x0cOgrYOOrkMyq9BmeFtiqrchmls=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
