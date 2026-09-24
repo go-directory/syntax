@@ -413,7 +413,7 @@ func selectURIPrefix(input []byte) (l int, typ []byte) {
 }
 
 func splitAndTrim(s, sep []byte) [][]byte {
-	// sep is always 1 byte in your code
+	// sep is always 1 byte here
 	c := sep[0]
 
 	var parts [][]byte
