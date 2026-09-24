@@ -103,4 +103,3 @@ func TestBootParameter(t *testing.T) {
 	var bp BootParameter
 	_ = bp.String()
 }
-
