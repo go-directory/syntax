@@ -441,6 +441,9 @@ See also [AttributeType] and [AttributeOption].
 */
 type AttributeDescription LDAPString
 
+func (r AttributeDescription) EqualFold(o AttributeDescription) bool { return beqf(r,o) }
+func (r AttributeDescription) Equal(o AttributeDescription) bool     { return beq(r,o) }
+
 /*
 AttributeType implements a numeric OID or descriptor ("short name") type, per
 [§ 2.5 of RFC4512]. A value of this type serves as the primary component of
@@ -455,6 +458,10 @@ Examples:
 [§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
 */
 type AttributeType LDAPString
+
+func (r AttributeType) EqualFold(o AttributeType) bool { return beqf(r,o) }
+func (r AttributeType) Equal(o AttributeType) bool     { return beq(r,o) }
+func (r AttributeType) Valid() bool                    { return isAttribute(r) }
 
 /*
 String returns the string representation of the receiver instance.
@@ -580,6 +587,9 @@ AttributeValue implements an ASN.1 OCTET STRING derivative type
 for use in various assertion and encapsulation use cases.
 */
 type AttributeValue OctetString
+
+func (r AttributeValue) EqualFold(o AttributeValue) bool { return beqf(r,o) }
+func (r AttributeValue) Equal(o AttributeValue) bool     { return beq(r,o) }
 
 /*
 String returns the string representation of the receiver instance.

@@ -37,6 +37,16 @@ func TestIsAttribute(t *testing.T) {
 			t.Errorf("%s[%d] failed: %q; want error, got nil", t.Name(), idx, bad)
 		}
 	}
+
+	ad := AttributeDescription(`cn;lang-sl`)
+	if !ad.Type().Valid() {
+		t.Fatalf("%s failed: valid attribute %q flagged as invalid", t.Name(), ad)
+	}
+
+	ad = AttributeDescription(`givenName`)
+	ad2 := AttributeDescription(`givenname`)
+	_ = ad.EqualFold(ad2)
+	_ = ad.Equal(ad2)
 }
 
 func ExampleAttributeTypeAndValue_roundTripDER() {
