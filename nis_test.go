@@ -104,11 +104,3 @@ func TestBootParameter(t *testing.T) {
 	_ = bp.String()
 }
 
-func TestNIS_codecov(t *testing.T) {
-	isKeystring(`c--l`)
-	isKeystring(`-`)
-	isKeystring(``)
-	isKeystring(`c界j`)
-	isKeystring(`A`)
-	isKeystring(`abc`)
-}

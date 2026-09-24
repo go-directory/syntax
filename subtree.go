@@ -5,7 +5,6 @@ subtree.go implements the RFC3672 SubtreeSpecification.
 */
 
 import (
-	"strconv"
 	"strings"
 )
 
@@ -476,7 +475,7 @@ func subtreeMinMax(raw string, begin int) (minmax BaseDistance, end int, err err
 		break
 	}
 
-	if m, err = strconv.Atoi(max); err == nil {
+	if m, err = atoi(max); err == nil {
 		minmax = BaseDistance(m)
 		end = len(max)
 	}
@@ -512,12 +511,12 @@ func (r SubtreeSpecification) String() (s string) {
 	}
 
 	if r.ChopSpecification.Minimum > 0 {
-		_s = append(_s, `minimum `+strconv.Itoa(int(r.ChopSpecification.Minimum)))
+		_s = append(_s, `minimum `+itoa(int(r.ChopSpecification.Minimum)))
 
 	}
 
 	if r.ChopSpecification.Maximum > 0 {
-		_s = append(_s, `maximum `+strconv.Itoa(int(r.ChopSpecification.Maximum)))
+		_s = append(_s, `maximum `+itoa(int(r.ChopSpecification.Maximum)))
 
 	}
 

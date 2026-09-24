@@ -5,8 +5,6 @@ ostr.go contains ASN.1 OCTET STRING types and methods.
 */
 
 import (
-	"strconv"
-
 	"github.com/go-directory/encoding/asn1"
 )
 
@@ -62,7 +60,7 @@ func marshalOctetString(x any) (oct OctetString, err error) {
 		var c rune = runes[i]
 		// octet range is simply IA5 chars
 		if c > 0x7F {
-			err = syntaxError("OCTET STRING: incompatible character: " + strconv.Itoa(int(c)))
+			err = syntaxError("OCTET STRING: incompatible character: " + itoa(int(c)))
 		}
 	}
 

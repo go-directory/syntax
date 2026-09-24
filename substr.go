@@ -6,7 +6,6 @@ substr.go implements the substring assertion type.
 
 import (
 	"bytes"
-	"strconv"
 	"unicode"
 	"unicode/utf8"
 
@@ -140,7 +139,7 @@ func (r *Substrings) Decode(enc []byte) error {
 
 		if first := childPayload[0]; first != asn1.TagOctetString {
 			err = asn1Error("Substring: unexpected tag ",
-				strconv.Itoa(int(first)))
+				itoa(int(first)))
 			break
 		}
 
@@ -160,7 +159,7 @@ func (r *Substrings) Decode(enc []byte) error {
 
 		default:
 			err = asn1Error("Substring: unexpected tag ",
-				strconv.Itoa(int(childTag.Tag)))
+				itoa(int(childTag.Tag)))
 		}
 	}
 
@@ -239,8 +238,8 @@ func (r *SubstringAny) Decode(enc []byte) error {
 		if childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
 			if childTag.Tag != uint32(asn1.TagOctetString) {
 				err = asn1Error("Substring.Any Assertion Value: want %d, got %d",
-					strconv.Itoa(int(asn1.TagOctetString)),
-					strconv.Itoa(int(childTag.Tag)))
+					itoa(int(asn1.TagOctetString)),
+					itoa(int(childTag.Tag)))
 				break
 			}
 			*r = append(*r, AssertionValue(childPayload))
@@ -313,7 +312,7 @@ func decodeSubstringInitOrFinal(enc []byte) (sub Substring, err error) {
 					sub = SubstringFinal(val)
 				}
 			default:
-				err = asn1Error("Substring: unexpected tag ", strconv.Itoa(int(tag.Tag)))
+				err = asn1Error("Substring: unexpected tag ", itoa(int(tag.Tag)))
 			}
 		}
 	}

@@ -413,30 +413,3 @@ func (r *BootParameter) Decode(enc []byte) error {
 
 	return nil
 }
-
-// TODO - not sure if we need this
-func isKeystring(x string) bool {
-	if len(x) == 0 {
-		return false
-	}
-
-	if !isAlpha(rune(x[0])) || rune(x[len(x)-1]) == '-' {
-		return false
-	}
-
-	var last rune
-	for i := 1; i < len(x); i++ {
-		if last == '-' && rune(x[i]) == last {
-			return false
-		} else if !isXString(rune(x[i])) {
-			return false
-		}
-		last = rune(x[i])
-	}
-
-	return true
-}
-
-func isXString(r rune) bool {
-	return isAlpha(r) || isDigit(r) || r == '-'
-}

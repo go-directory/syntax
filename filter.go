@@ -7,7 +7,6 @@ filter.go contains RFC4515 methods and types.
 import (
 	"bytes"
 	"errors"
-	"strconv"
 	"strings"
 )
 
@@ -1121,7 +1120,7 @@ func oIDSyntaxCheck(o []byte) bool {
 
 	switch rune(O[0][0]) {
 	case '0', '1':
-		if i, err := strconv.Atoi(string(O[1])); err != nil {
+		if i, err := atoi(string(O[1])); err != nil {
 			return false
 		} else if !(0 <= i && i <= 39) {
 			return false

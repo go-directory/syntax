@@ -22,11 +22,16 @@ func uSeqTag() asn1.Tag { return aTag(0, true, 16) }
 
 type textLike interface{ ~string | ~[]byte }
 
-var itoa = strconv.Itoa
-var atoi = strconv.Atoi
-var puint = strconv.ParseUint
-var fuint = strconv.FormatUint
-var fint = strconv.FormatInt
+// strconv aliases
+var (
+	atoi  = strconv.Atoi
+	fint  = strconv.FormatInt
+	fuint = strconv.FormatUint
+	itoa  = strconv.Itoa
+	pbool = strconv.ParseBool
+	pint  = strconv.ParseInt
+	puint = strconv.ParseUint
+)
 
 func b2s(b []byte) string { return string(b) }
 func s2b(b string) []byte { return []byte(b) }

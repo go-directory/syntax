@@ -3,7 +3,6 @@ package syntax
 import (
 	"bytes"
 	"encoding/binary"
-	"strconv"
 	"unicode/utf8"
 
 	"github.com/go-directory/encoding/asn1"
@@ -84,7 +83,7 @@ func (r UniversalString) Encode() ([]byte, error) {
 func universalStringCharacterOutOfBounds(r rune) (err error) {
 	if r > 0x10FFFF || (r >= 0xD800 && r <= 0xDFFF) {
 		err = syntaxError("UNIVERSAL STRING: invalid code point ",
-			string(r), " (", strconv.Itoa(int(r)), ")")
+			string(r), " (", itoa(int(r)), ")")
 	}
 
 	return

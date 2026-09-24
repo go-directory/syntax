@@ -1,8 +1,6 @@
 package syntax
 
 import (
-	"strconv"
-
 	"github.com/go-directory/encoding/asn1"
 )
 
@@ -179,7 +177,7 @@ func decodeFilterByTag(tag uint32, payload []byte) (f Filter, err error) {
 		err = x.Decode(payload)
 		f = x
 	default:
-		err = asn1Error("unexpected Filter tag ", strconv.Itoa(int(tag)))
+		err = asn1Error("unexpected Filter tag ", itoa(int(tag)))
 	}
 
 	return
@@ -651,8 +649,8 @@ func (r *MatchingRuleAssertion) Decode(enc []byte) error {
 
 			if childTag.Class != asn1.ClassContextSpecific {
 				err = asn1Error("MatchingRuleAssertion.Decode: wrong class: got ",
-					strconv.Itoa(int(childTag.Class)), ", want ",
-					strconv.Itoa(int(asn1.ClassContextSpecific)))
+					itoa(int(childTag.Class)), ", want ",
+					itoa(int(asn1.ClassContextSpecific)))
 				break
 			}
 
@@ -689,7 +687,7 @@ func (r *MatchingRuleAssertion) Decode(enc []byte) error {
 
 			default:
 				err = asn1Error("MatchingRuleAssertion.Decode: unexpected context-specific tag ",
-					strconv.Itoa(int(childTag.Tag)))
+					itoa(int(childTag.Tag)))
 			}
 		}
 	}

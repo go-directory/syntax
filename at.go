@@ -7,7 +7,6 @@ at.go contains Attribute related types and methods.
 import (
 	"bytes"
 	"encoding/hex"
-	"strconv"
 	"strings"
 
 	"github.com/go-directory/encoding/asn1"
@@ -179,7 +178,7 @@ func (r *PartialAttribute) Decode(enc []byte) error {
 	}
 	if enc[p] != asn1.TagOctetString {
 		return asn1Error("PartialAttribute.Decode: expected OCTET STRING, got ",
-			strconv.Itoa(int(enc[p])))
+			itoa(int(enc[p])))
 	}
 	typeLen := int(enc[p+1])
 	if p+2+typeLen > len(enc) {
@@ -208,7 +207,7 @@ func (r *PartialAttribute) Decode(enc []byte) error {
 
 			if valsPayload[p2] != asn1.TagOctetString {
 				err = asn1Error("PartialAttribute.Decode: expected OCTET STRING, got ",
-					strconv.Itoa(int(valsPayload[p2])))
+					itoa(int(valsPayload[p2])))
 				break
 			}
 
@@ -306,7 +305,7 @@ func (r *AttributeSelection) Decode(enc []byte) error {
 
 			if enc[p] != asn1.TagOctetString {
 				err = asn1Error("AttributeSelection.Decode: expected OCTET STRING (4), got ",
-					strconv.Itoa(int(enc[p])))
+					itoa(int(enc[p])))
 				break
 			}
 
@@ -656,7 +655,7 @@ func (r *AttributeTypeAndValue) Decode(enc []byte) error {
 	}
 	if enc[p] != asn1.TagOctetString {
 		return asn1Error("AttributeTypeAndValue.Decode: expected OCTET STRING, got ",
-			strconv.Itoa(int(enc[p])))
+			itoa(int(enc[p])))
 	}
 	typeLen := int(enc[p+1])
 	if p+2+typeLen > len(enc) {
@@ -827,7 +826,7 @@ func (r AttributeTypeAndValue) decodeString(str string) (string, error) {
 			return "", syntaxError("DistinguishedName: failed to decode escaped character: ", err.Error())
 		} else if n != 1 {
 			return "", syntaxError("DistinguishedName: failed to decode escaped character: encoding/hex: expected 1 byte when un-escaping, got ",
-				strconv.Itoa(n))
+				itoa(n))
 		}
 
 		bld.WriteByte(dst[0])

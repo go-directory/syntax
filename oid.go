@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"math"
 	"math/big"
-	"strconv"
 	"strings"
 
 	"github.com/go-directory/encoding/vlq"
@@ -386,7 +385,7 @@ func (r ObjectIdentifier) IntSlice() (slice []int, err error) {
 	var t []int
 	for i := 0; i < len(r) && err == nil; i++ {
 		var n int
-		if n, err = strconv.Atoi(r[i].String()); err == nil {
+		if n, err = atoi(r[i].String()); err == nil {
 			t = append(t, n)
 		}
 	}
@@ -420,7 +419,7 @@ func (r ObjectIdentifier) Uint64Slice() (slice []uint64, err error) {
 	var t []uint64
 	for i := 0; i < len(r) && err == nil; i++ {
 		var n uint64
-		if n, err = strconv.ParseUint(r[i].String(), 10, 64); err == nil {
+		if n, err = puint(r[i].String(), 10, 64); err == nil {
 			t = append(t, n)
 		}
 	}
@@ -700,7 +699,7 @@ func (r numberForm) String() string {
 	if r.big {
 		s = r.bigInt.String()
 	} else {
-		s = strconv.FormatUint(r.native, 10)
+		s = fuint(r.native, 10)
 	}
 
 	return s

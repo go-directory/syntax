@@ -5,7 +5,6 @@ unicode.go handles rune analysis and unicode ranging.
 */
 
 import (
-	"strconv"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -337,7 +336,7 @@ func isUTFMBChar(r rune) (b bool, err error) {
 
 	if !b {
 		err = syntaxError("invalid leading byte for ",
-			strconv.Itoa(n), "-byte sequence, or bad length")
+			itoa(n), "-byte sequence, or bad length")
 	}
 
 	return
