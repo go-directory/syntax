@@ -72,6 +72,40 @@ func (r *PartialAttributeList) Decode(enc []byte) error {
 }
 
 /*
+Process returns an instance of [PartialAttributeList] alongside an error following
+an attempt to resolve numeric OID to descriptors.
+
+Generally this method is called by the DSA just before the [SearchResultEntry] is
+to be disclosed to the user.
+*/
+func (r PartialAttributeList) Process(
+        resolver func([]byte) ([]byte, []byte, [][]byte, uint),
+) (
+        PartialAttributeList, error,
+) {
+        var err error
+        var palist PartialAttributeList
+
+        for i := 0; i < len(r); i++ {
+                tags := r[i].Type.Tag()
+                typ := r[i].Type.Type()
+
+                _, princ, _, _ := resolver(typ)
+
+                if len(tags) > 0 {
+                        // Preserve any tags that may have been present.
+                        princ = append(princ, tags...)
+                }
+                palist = append(palist, PartialAttribute{
+                        Type: AttributeDescription(princ),
+                        Vals: r[i].Vals,
+                })
+        }
+
+        return palist, err
+}
+
+/*
 AttributeList implements [§ 4.7 of RFC4511]. Instances of this type are found
 within [AddRequest] instances.
 
@@ -80,9 +114,55 @@ within [AddRequest] instances.
 type AttributeList []Attribute
 
 /*
-Encode returns an instance of []byte alongside an error following an
-attempt to encode the contents of the receiver instance as a UNIVERSAL
-SEQUENCE OF.
+Process returns an instance of [AttributeList] alongside an error following
+an attempt to resolve all descriptors to numeric OIDs and altering on any
+duplicate types encountered.
+*/
+func (r AttributeList) Process(
+	resolver func([]byte) ([]byte, []byte, [][]byte, uint),
+) (
+	AttributeList, error,
+) {
+	var err error
+	var alist AttributeList
+
+	seen := make(map[string]struct{})
+	L := len(r)
+
+        for i := 0; i < L && err == nil; i++ {
+		tags := r[i].Type.Tag()
+		typ := r[i].Type.Type()
+
+                noid, princ, _, _ := resolver(typ)
+                if len(noid) == 0 {
+			err = syntaxError("unknown attribute '", typ.String(), "'")
+			break
+                }
+
+                aoid := string(noid)
+                if _, found := seen[aoid]; found {
+			err = syntaxError(" attribute '", string(princ),
+				"' specified more than once")
+			break
+                }
+
+                seen[aoid] = struct{}{}
+		if len(tags) > 0 {
+			// Preserve any tags that may have been present.
+			noid = append(noid, tags...)
+		}
+		alist = append(alist, Attribute{
+			Type: AttributeDescription(noid),
+			Vals: r[i].Vals,
+		})
+        }
+
+	return alist, err
+}
+
+/*
+Encode returns an instance of []byte alongside an error following an attempt
+to encode the contents of the receiver instance as a UNIVERSAL SEQUENCE OF.
 */
 func (r AttributeList) Encode() ([]byte, error) {
 	// Encode each PartialAttribute
@@ -101,9 +181,9 @@ func (r AttributeList) Encode() ([]byte, error) {
 }
 
 /*
-Decode returns an error following an attempt to decode and write the
-input encoding to the receiver instance. The encoding must not be
-truncated and must bear the UNIVERSAL SEQUENCE OF tag (0x30).
+Decode returns an error following an attempt to decode and write the input
+encoding to the receiver instance. The encoding must not be truncated and
+must bear the UNIVERSAL SEQUENCE OF tag (0x30).
 */
 func (r *AttributeList) Decode(enc []byte) error {
 	p := 0
@@ -139,10 +219,13 @@ func (r *AttributeList) Decode(enc []byte) error {
 
 /*
 PartialAttribute implements the partialAttribute type, per [§ 4.1.7 of RFC4511], and
-serve as slices within instances of [PartialAttributeList]. This type also serves as
-the super type for the [Attribute] type.
+serves as slice members within instances of [PartialAttributeList], as well as the
+"modification" component of a Modify Request Change, per [§ 4.6 of RFC4511].
+
+This type also serves as the concrete type for the [Attribute] type alias.
 
 [§ 4.1.7 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.1.7
+[§ 4.6 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.6
 */
 type PartialAttribute struct {
 	Type AttributeDescription
@@ -416,7 +499,7 @@ instances, this method imposes the default of `*` (allUA=true).
 [go-directory/schema]: https://github.com/go-directory/schema
 */
 func (r AttributeSelection) Process(
-	resolver func(string) (string, string, []string, int),
+	resolver func([]byte) ([]byte, []byte, [][]byte, uint),
 ) (
 	clean AttributeSelection,
 	oid2descr map[string]AttributeDescription,
@@ -437,19 +520,23 @@ func (r AttributeSelection) Process(
 			continue
 		}
 
-		noid, princ, _, _ := resolver(string(r[i]))
-		if noid == "" {
+		noid, princ, _, _ := resolver(r[i])
+		if len(noid) == 0 {
 			// silently ignore nonexistent attribute types
 			continue
 		}
 
-		aoid := string(AttributeDescription(noid))
+		aoid := string(noid)
 		if _, found := seen[aoid]; found {
 			// silently ignore duplicative attribute types
 			continue
 		}
 
 		seen[aoid] = struct{}{}
+		if tags := AttributeDescription(r[i]).Tag(); len(tags) > 0 {
+			// preserve any tags
+			princ = append(princ, tags...)
+		}
 		oid2descr[aoid] = AttributeDescription(princ)
 		clean = append(clean, LDAPString(noid))
 	}
