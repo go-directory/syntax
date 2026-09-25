@@ -204,29 +204,9 @@ func bytesCompare(a, b []byte) int {
 }
 
 /*
-splitUnescaped returns an instance of []string based upon an attempt
-to split the input str value on separator characters which are NOT
-escaped. Escaped separator values are ignored.
-
-For example, this allows a string to be split on comma (,) while
-ignoring escaped commas (\,).
-*/
-func splitUnescaped(str, sep, esc string) (slice []string) {
-	slice = strings.Split(str, sep)
-	for i := len(slice) - 2; i >= 0; i-- {
-		if strings.HasSuffix(slice[i], esc) {
-			slice[i] = slice[i][:len(slice[i])-len(esc)] + sep + slice[i+1]
-			slice = append(slice[:i+1], slice[i+2:]...)
-		}
-	}
-
-	return
-}
-
-/*
-splitUnescaped returns an instance of [][]byte based upon an attempt
-to split the input str value on separator characters which are NOT
-escaped. Escaped separator values are ignored.
+splitUnescapedBytes returns an instance of [][]byte based upon an attempt
+to split the input str value on separator characters which are NOT escaped.
+Escaped separator values are ignored.
 
 For example, this allows a string to be split on comma (,) while
 ignoring escaped commas (\,).
