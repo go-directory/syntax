@@ -84,33 +84,29 @@ The input value type must be a string, such as `("laptop","jesse","example.com")
 or `("-","-","-")`.
 */
 func NewNetgroupTriple(x any) (trip NetgroupTriple, err error) {
-	var raw string
-	if raw, err = assertString(x, 4, "NIS Netgroup Triple"); err != nil {
-		return
-	}
+	var raw []byte
+	if raw, err = assertBytes(x, 4, "NIS Netgroup Triple"); err == nil {
+		if err = validTripleEncap(raw); err == nil {
+			value := raw[1 : len(raw)-1]
+			ngt := splitUnescapedBytes(value, tComma, tBSlash)
 
-	if err = validTripleEncap(raw); err != nil {
-		return
-	}
+			if len(ngt) != 3 {
+				err = syntaxError("NIS Netgroup Triple does not contain exactly three (3) keystring/hyphen/null values")
+				return
+			}
 
-	value := raw[1 : len(raw)-1]
-	ngt := splitUnescaped(value, `,`, `\`)
+			var _trip NetgroupTriple
 
-	if len(ngt) != 3 {
-		err = syntaxError("NIS Netgroup Triple does not contain exactly three (3) keystring/hyphen/null values")
-		return
-	}
+			for i := 0; i < len(ngt) && err == nil; i++ {
+				var ia5 IA5String
+				ia5, err = marshalIA5String(ngt[i])
+				_trip.setNetgroupTripleFieldByIndex(i, ia5)
+			}
 
-	var _trip NetgroupTriple
-
-	for i := 0; i < len(ngt) && err == nil; i++ {
-		var ia5 IA5String
-		ia5, err = marshalIA5String(ngt[i])
-		_trip.setNetgroupTripleFieldByIndex(i, ia5)
-	}
-
-	if err == nil {
-		trip = _trip
+			if err == nil {
+				trip = _trip
+			}
+		}
 	}
 
 	return
@@ -187,7 +183,7 @@ func (r *NetgroupTriple) Decode(enc []byte) error {
 	return err
 }
 
-func validTripleEncap(raw string) (err error) {
+func validTripleEncap(raw []byte) (err error) {
 	if !(raw[0] == '(' && raw[len(raw)-1] == ')') {
 		err = syntaxError("NIS Netgroup Triple encapsulation error")
 	}
