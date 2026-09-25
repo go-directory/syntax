@@ -151,7 +151,7 @@ func marshalFacsimileTelephoneNumber(x any) (ftn FacsimileTelephoneNumber, err e
 		return
 	}
 
-	raws := splitUnescapedBytes(raw, []byte(`$`), []byte(`\`))
+	raws := splitUnescapedBytes(raw, tDollar, tBSlash)
 
 	if len(raws) <= 1 {
 		err = syntaxError("Invalid Facsimile Telephone Number")
@@ -305,7 +305,7 @@ func marshalTelexNumber(x any) (tn TelexNumber, err error) {
 		return tn, errorBadType("Telex Number")
 	}
 
-	parts := splitUnescapedBytes(raw, []byte("$"), []byte("\\"))
+	parts := splitUnescapedBytes(raw, tDollar, tBSlash)
 
 	if len(parts) != 3 {
 		return tn, syntaxError("Invalid Telex Number value")
@@ -467,7 +467,7 @@ func marshalTeletexTerminalIdentifier(x any) (tti TeletexTerminalIdentifier, err
 		return
 	}
 
-	_raws := splitUnescapedBytes(raw, []byte(`$`), []byte(`\`))
+	_raws := splitUnescapedBytes(raw, tDollar, tBSlash)
 	if raws, vals, err = marshalTeletex(_raws[1:]); err != nil {
 		return
 	} else if _, err = marshalPrintableString(_raws[0]); err != nil {
