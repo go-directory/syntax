@@ -14,7 +14,7 @@ import (
 
 /*
 PartialAttributeList implements [§ 4.5.2 of RFC4511]. Instances of this type are
-found within [SearchResultEntry] instances.
+found within SearchResultEntry instances.
 
 [§ 4.5.2 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.5.2
 */
@@ -92,7 +92,7 @@ func (r *PartialAttributeList) Decode(enc []byte) error {
 Process returns an instance of [PartialAttributeList] alongside an error following
 an attempt to resolve numeric OID to descriptors.
 
-Generally this method is called by the DSA just before the [SearchResultEntry] is
+Generally this method is called by the DSA just before the SearchResultEntry is
 to be disclosed to the user.
 */
 func (r PartialAttributeList) Process(
@@ -394,7 +394,7 @@ func (r *PartialAttribute) Decode(enc []byte) error {
 AttributeSelection implements [§ 4.5.1.8 of RFC 4511] to serve as a slice
 type of [LDAPString] instances. Normally, instances of this type are used
 by a client to control which attribute types are to be sent over the wire
-via an instance of [SearchRequest].
+via an instance of SearchRequest.
 
 Note that the [LDAPString] is constrained to "attributeSelector" per [§
 4.5.1.8 of RFC 4511].
