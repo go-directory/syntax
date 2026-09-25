@@ -103,6 +103,8 @@ func isNumericOID(x any) bool {
 	return err == nil
 }
 
+func (r LDAPOID) Equal(o LDAPOID) bool { return beq(r,o) }
+
 func (r LDAPOID) String() string { return string(r) }
 
 func (r LDAPOID) Encode() ([]byte, error) {
