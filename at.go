@@ -27,14 +27,14 @@ if found, else -1 is returned.
 Case is not significant in the matching process.
 */
 func (r PartialAttributeList) IndexOf(at AttributeDescription) int {
-        var idx int = -1
-        for i := 0; i < len(r) && idx == -1; i++ {
-                if r[i].Type.EqualFold(at) {
-                        idx = i
-                }
-        }
+	var idx int = -1
+	for i := 0; i < len(r) && idx == -1; i++ {
+		if r[i].Type.EqualFold(at) {
+			idx = i
+		}
+	}
 
-        return idx
+	return idx
 }
 
 /*
@@ -96,30 +96,30 @@ Generally this method is called by the DSA just before the [SearchResultEntry] i
 to be disclosed to the user.
 */
 func (r PartialAttributeList) Process(
-        resolver func([]byte) ([]byte, []byte, [][]byte, uint),
+	resolver func([]byte) ([]byte, []byte, [][]byte, uint),
 ) (
-        PartialAttributeList, error,
+	PartialAttributeList, error,
 ) {
-        var err error
-        var palist PartialAttributeList
+	var err error
+	var palist PartialAttributeList
 
-        for i := 0; i < len(r); i++ {
-                tags := r[i].Type.Tag()
-                typ := r[i].Type.Type()
+	for i := 0; i < len(r); i++ {
+		tags := r[i].Type.Tag()
+		typ := r[i].Type.Type()
 
-                _, princ, _, _ := resolver(typ)
+		_, princ, _, _ := resolver(typ)
 
-                if len(tags) > 0 {
-                        // Preserve any tags that may have been present.
-                        princ = append(princ, tags...)
-                }
-                palist = append(palist, PartialAttribute{
-                        Type: AttributeDescription(princ),
-                        Vals: r[i].Vals,
-                })
-        }
+		if len(tags) > 0 {
+			// Preserve any tags that may have been present.
+			princ = append(princ, tags...)
+		}
+		palist = append(palist, PartialAttribute{
+			Type: AttributeDescription(princ),
+			Vals: r[i].Vals,
+		})
+	}
 
-        return palist, err
+	return palist, err
 }
 
 /*
@@ -163,24 +163,24 @@ func (r AttributeList) Process(
 	seen := make(map[string]struct{})
 	L := len(r)
 
-        for i := 0; i < L && err == nil; i++ {
+	for i := 0; i < L && err == nil; i++ {
 		tags := r[i].Type.Tag()
 		typ := r[i].Type.Type()
 
-                noid, princ, _, _ := resolver(typ)
-                if len(noid) == 0 {
+		noid, princ, _, _ := resolver(typ)
+		if len(noid) == 0 {
 			err = syntaxError("unknown attribute '", typ.String(), "'")
 			break
-                }
+		}
 
-                aoid := string(noid)
-                if _, found := seen[aoid]; found {
+		aoid := string(noid)
+		if _, found := seen[aoid]; found {
 			err = syntaxError(" attribute '", string(princ),
 				"' specified more than once")
 			break
-                }
+		}
 
-                seen[aoid] = struct{}{}
+		seen[aoid] = struct{}{}
 		if len(tags) > 0 {
 			// Preserve any tags that may have been present.
 			noid = append(noid, tags...)
@@ -189,7 +189,7 @@ func (r AttributeList) Process(
 			Type: AttributeDescription(noid),
 			Vals: r[i].Vals,
 		})
-        }
+	}
 
 	return alist, err
 }
