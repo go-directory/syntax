@@ -87,6 +87,18 @@ String returns the string representation of the receiver instance.
 func (r LDAPDN) String() string { return b2s(r) }
 
 /*
+EqualFold returns a Boolean value indicative of the receiver and input
+instances being equal without taking case-folding into account.
+*/
+func (r LDAPDN) EqualFold(o LDAPDN) bool { return beqf(r, o) }
+
+/*
+Equal returns a Boolean value indicative of the receiver and input
+instances being equal while taking case-folding into account.
+*/
+func (r LDAPDN) Equal(o LDAPDN) bool { return beq(r, o) }
+
+/*
 RDN returns only the [RelativeLDAPDN] component of the receiver instance.
 */
 func (r LDAPDN) RDN() RelativeLDAPDN {
