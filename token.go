@@ -12,8 +12,9 @@ var (
 
 	tTripleSlash      = []byte("///")
 	tColonDoubleSlash = []byte("://")
-	tSlash            = []byte("/")
+	tDollar		  = []byte("$")
 	tBSlash           = []byte(`\`)
+	tSlash            = []byte("/")
 	tColon            = []byte(":")
 	tComma            = []byte(",")
 	tQMark            = []byte("?")
