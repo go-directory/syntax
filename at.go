@@ -12,8 +12,19 @@ import (
 	"github.com/go-directory/encoding/asn1"
 )
 
+/*
+PartialAttributeList implements [§ 4.5.2 of RFC4511]. Instances of this type are
+found within [SearchResultEntry] instances.
+
+[§ 4.5.2 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.5.2
+*/
 type PartialAttributeList []PartialAttribute
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the contents of the receiver instance as a UNIVERSAL
+SEQUENCE.
+*/
 func (r PartialAttributeList) Encode() ([]byte, error) {
 	payload := make([]byte, 0)
 
@@ -28,6 +39,11 @@ func (r PartialAttributeList) Encode() ([]byte, error) {
 	return asn1.WrapTLV(payload, uSeqTag())
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated and must bear the UNIVERSAL SEQUENCE tag (0x30).
+*/
 func (r *PartialAttributeList) Decode(enc []byte) error {
 	p := 0
 
@@ -55,8 +71,19 @@ func (r *PartialAttributeList) Decode(enc []byte) error {
 	return err
 }
 
+/*
+AttributeList implements [§ 4.7 of RFC4511]. Instances of this type are found
+within [AddRequest] instances.
+
+[§ 4.7 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.7
+*/
 type AttributeList []Attribute
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the contents of the receiver instance as a UNIVERSAL
+SEQUENCE OF.
+*/
 func (r AttributeList) Encode() ([]byte, error) {
 	// Encode each PartialAttribute
 	payload := make([]byte, 0)
@@ -73,6 +100,11 @@ func (r AttributeList) Encode() ([]byte, error) {
 	return asn1.WrapTLV(payload, uSeqTag())
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated and must bear the UNIVERSAL SEQUENCE OF tag (0x30).
+*/
 func (r *AttributeList) Decode(enc []byte) error {
 	p := 0
 
@@ -106,7 +138,9 @@ func (r *AttributeList) Decode(enc []byte) error {
 }
 
 /*
-PartialAttribute implements the partialAttribute type, per [§ 4.1.7 of RFC4511].
+PartialAttribute implements the partialAttribute type, per [§ 4.1.7 of RFC4511], and
+serve as slices within instances of [PartialAttributeList]. This type also serves as
+the super type for the [Attribute] type.
 
 [§ 4.1.7 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.1.7
 */
@@ -115,6 +149,11 @@ type PartialAttribute struct {
 	Vals []AttributeValue
 }
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the contents of the receiver instance as a UNIVERSAL
+SEQUENCE.
+*/
 func (r PartialAttribute) Encode() ([]byte, error) {
 	// Encode type
 	typeEnc, err := r.Type.Encode()
@@ -157,6 +196,11 @@ func (r PartialAttribute) Encode() ([]byte, error) {
 	return final, nil
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated and must bear the UNIVERSAL SEQUENCE tag (0x30).
+*/
 func (r *PartialAttribute) Decode(enc []byte) error {
 	p := 0
 
@@ -232,7 +276,8 @@ func (r *PartialAttribute) Decode(enc []byte) error {
 
 AttributeSelection implements [§ 4.5.1.8 of RFC 4511] to serve as a slice
 type of [LDAPString] instances. Normally, instances of this type are used
-by a client to control which attribute types are to be sent over the wire.
+by a client to control which attribute types are to be sent over the wire
+via an instance of [SearchRequest].
 
 Note that the [LDAPString] is constrained to "attributeSelector" per [§
 4.5.1.8 of RFC 4511].
@@ -269,7 +314,7 @@ func (r AttributeSelection) Encode() ([]byte, error) {
 
 /*
 Decode returns an error following an attempt to decode and write the
-input encoding to the receiver instance. The encoding MUST NOT be
+input encoding to the receiver instance. The encoding must not be
 truncated, and must bear the ASN.1 UNIVERSAL SEQUENCE tag (0x30).
 */
 func (r *AttributeSelection) Decode(enc []byte) error {
@@ -435,14 +480,31 @@ Examples:
   - givenName
   - cn;lang-sl
 
+All possible implementations of this type are to be treated as case-insensitive.
+
 See also [AttributeType] and [AttributeOption].
 
 [§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
 */
 type AttributeDescription LDAPString
 
-func (r AttributeDescription) EqualFold(o AttributeDescription) bool { return beqf(r,o) }
-func (r AttributeDescription) Equal(o AttributeDescription) bool     { return beq(r,o) }
+/*
+EqualFold returns a Boolean value indicative of both the receiver and
+input instances being equal without case-folding taken into account.
+*/
+func (r AttributeDescription) EqualFold(o AttributeDescription) bool { return beqf(r, o) }
+
+/*
+Equal returns a Boolean value indicative of both the receiver and
+input instanes being equal with case-folding taken into account.
+
+According to [§ 2.5 of RFC4512], an instance of this type is to be
+treated as case-insensitive. Generally speaking, it is preferrable
+to use [AttributeDescription.EqualFold].
+
+[§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
+*/
+func (r AttributeDescription) Equal(o AttributeDescription) bool { return beq(r, o) }
 
 /*
 AttributeType implements a numeric OID or descriptor ("short name") type, per
@@ -459,9 +521,28 @@ Examples:
 */
 type AttributeType LDAPString
 
-func (r AttributeType) EqualFold(o AttributeType) bool { return beqf(r,o) }
-func (r AttributeType) Equal(o AttributeType) bool     { return beq(r,o) }
-func (r AttributeType) Valid() bool                    { return isAttribute(r) }
+/*
+EqualFold returns a Boolean value indicative of both the receiver and
+input instances being equal without case-folding taken into account.
+*/
+func (r AttributeType) EqualFold(o AttributeType) bool { return beqf(r, o) }
+
+/*
+Equal returns a Boolean value indicative of both the receiver and input instanes
+being equal with case-folding taken into account.
+
+According to [§ 2.5 of RFC4512], an instance of this type is to be treated as
+case-insensitive. Generally speaking, it is preferrable to use [AttributeType.EqualFold].
+
+[§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
+*/
+func (r AttributeType) Equal(o AttributeType) bool { return beq(r, o) }
+
+/*
+Valid returns a Boolean value indicative of the receiver instance containing a
+valid numeric OID or descriptor.
+*/
+func (r AttributeType) Valid() bool { return isAttribute(r) }
 
 /*
 String returns the string representation of the receiver instance.
@@ -469,10 +550,16 @@ String returns the string representation of the receiver instance.
 func (r AttributeType) String() string { return string(r) }
 
 /*
-AttributeOption implements [§ 2.5 of RFC4512]. At present, the only
-recognized implementation of instances of this is an [AttributeTag].
+AttributeOption implements [§ 2.5.2 of RFC4512]. Implementations of this interface
+serve as slice members within an instance of [AttributeOptions].
 
-[§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
+All possible implementations of this type are to be treated as case-insensitive.
+
+At present, the only recognized implementation of "options" is an [AttributeTag], such
+as ";binary", ";lang-XX" (language key, such as "jp" for Japanese), ";collective" and
+others.
+
+[§ 2.5.2 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5.2
 */
 type AttributeOption interface {
 	Kind() string
@@ -481,11 +568,30 @@ type AttributeOption interface {
 }
 
 /*
+AttributeOptions implements slices of [AttributeOption] implementations. Instances
+of this type are produced following a call to [AttributeDescription.Options].
+*/
+type AttributeOptions []AttributeOption
+
+/*
 AttributeTag implements [§ 2.5.2 of RFC4512].
+
+For interrogation or processing of multiple tags, see also [AttributeTags].
 
 [§ 2.5.2 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5.2
 */
 type AttributeTag LDAPString
+
+/*
+AttributeTags is a convenience type used to parse a multi-tagged [AttributeTag],
+such as ";lang-sl;lang-jp" into slices.  Among other tasks, this is used during
+search operation processing and LDIF processing.
+
+Instances of this type can be created with the [AttributeTag.Split] method, or
+manually. When crafted manually, do not include the semicolon (ASCII hex. 3B,
+dec. 59) delimiter.
+*/
+type AttributeTags []AttributeTag
 
 /*
 Kind returns the string literal "tag" to describe the kind of [AttributeOption]
@@ -502,12 +608,101 @@ func (r AttributeTag) String() string { return string(r) }
 func (r AttributeTag) isAttributeOption() {}
 
 /*
+Join returns an instance of [AttributeTag], containing zero (0) or more joined
+";tag" statements derived from the receiver instance. This method is basically
+the inverse of [AttributeTag.Split].
+
+Note that individual slices should NOT be prefixed with a semicolon (ASCII hex.
+3B, dec. 59) manually; this is added during the joining process automatically.
+*/
+func (r AttributeTags) Join() AttributeTag {
+	var tag AttributeTag
+	if len(r) > 0 {
+		for i := 0; i < len(r); i++ {
+			if len(r[i]) > 0 {
+				slice := append(AttributeTag{0x3B}, r[i]...)
+				tag = append(tag, slice...)
+			}
+		}
+	}
+
+	return tag
+}
+
+/*
+Contains returns a Boolean value indicative of the input tag statement.
+
+Case-folding is not significant in the matching process, and any leading
+semicolons (ASCII hex. 3B, dec. 59) that are present will be disregarded.
+*/
+func (r AttributeTags) Contains(tag AttributeTag) bool {
+	var has bool
+	trimmed := bytes.TrimPrefix(tag, tSemi)
+	for i := 0; i < len(r) && !has; i++ {
+		has = r[i].EqualFold(trimmed)
+	}
+
+	return has
+}
+
+/*
+Split returns an instance of [AttributeTags] following an attempt to
+parse the receiver instance into unique [AttributeTag] slices.
+
+Case-folding is not significant with respect to uniqueness processing.
+The leading semicolon (ASCII hex. 3B, dec. 59) is NOT preserved.
+
+This method will only return a meaningful value if the receiver contains
+two (2) or more ";tag" statements.
+*/
+func (r AttributeTag) Split() AttributeTags {
+	var tags AttributeTags
+	if len(r) > 0 {
+		slices := splitOnByte(r, 0x3B) // ";"
+		if L := len(slices); L > 0 {
+			seen := make(map[string]struct{})
+			for i := 0; i < L; i++ {
+				tag := AttributeTag(slices[i])
+				ltag := string(lc(tag))
+				_, saw := seen[ltag]
+				if len(tag) > 0 && !saw {
+					tags = append(tags, tag)
+					seen[ltag] = struct{}{}
+				}
+			}
+		}
+	}
+
+	return tags
+}
+
+/*
+EqualFold returns a Boolean value indicative of both the receiver and
+input instances being equal without case-folding taken into account.
+*/
+func (r AttributeTag) EqualFold(o AttributeTag) bool { return beqf(r, o) }
+
+/*
+Equal returns a Boolean value indicative of both the receiver and
+input instanes being equal with case-folding taken into account.
+
+According to [§ 2.5 of RFC4512], an instance of this type is to be
+treated as case-insensitive. Generally speaking, it is preferrable
+to use [AttributeTag.EqualFold].
+
+[§ 2.5 of RFC4512]: https://datatracker.ietf.org/doc/html/rfc4512#section-2.5
+*/
+func (r AttributeTag) Equal(o AttributeTag) bool { return beq(r, o) }
+
+/*
 String returns the string representation of the receiver instance.
 Note that this will include any [AttributeOption] parameters, such
 as [AttributeTag] instances, that are present in the receiver instance.
 
 See also [AttributeDescription.Type] for a means of obtaining only
-the underlying [AttributeType].
+the underlying [AttributeType], and [AttributeDescription.Options]
+for a means of obtaining only the underlying [AttributeOptions]
+component.
 */
 func (r AttributeDescription) String() string { return string(r) }
 
@@ -521,7 +716,7 @@ instances -- such as language tags -- are not included in the return
 */
 func (r AttributeDescription) Type() AttributeType {
 	oid := r
-	if idx := bytes.Index(oid, []byte(`;`)); idx != -1 {
+	if idx := bytes.Index(oid, tSemi); idx != -1 {
 		oid = oid[:idx]
 	}
 
@@ -529,12 +724,11 @@ func (r AttributeDescription) Type() AttributeType {
 }
 
 /*
-Options returns slices of [AttributeOption] qualifier types based upon
-the contents of the receiver instance. For example attribute tags such
-as ";lang-sl", ";binary", et al, are among the possible returns.
+Options returns an instance of [AttributeOptions], containing zero (0)
+or more implementation slices of [AttributeOption].
 */
-func (r AttributeDescription) Options() []AttributeOption {
-	var options []AttributeOption
+func (r AttributeDescription) Options() AttributeOptions {
+	var options AttributeOptions
 	tsp := bytes.Split(r, []byte(`;`))
 	for i := 0; i < len(tsp); i++ {
 		// checkFilterOIDs enforces "keychar" ABNF.
@@ -544,6 +738,21 @@ func (r AttributeDescription) Options() []AttributeOption {
 	}
 
 	return options
+}
+
+/*
+Tag returns an instance of [AttributeTag]. The contents will be a series
+of zero (0) or more ";tag" statements.
+
+The return value can be split via the [AttributeTag.Split] method.
+*/
+func (r AttributeDescription) Tag() AttributeTag {
+	var tag AttributeTag
+	if idx := bytes.Index(r, []byte(`;`)); idx != -1 {
+		tag = AttributeTag(r[idx:]) // preserve leading ";"
+	}
+
+	return tag
 }
 
 /*
@@ -570,7 +779,7 @@ func (r AttributeDescription) Encode() ([]byte, error) {
 
 /*
 Decode returns an error following an attempt to decode and write the
-input encoding to the receiver instance. The encoding MUST NOT be
+input encoding to the receiver instance. The encoding must not be
 truncated, and must bear the ASN.1 OCTET STRING tag (0x04).
 */
 func (r *AttributeDescription) Decode(enc []byte) error {
@@ -588,19 +797,38 @@ for use in various assertion and encapsulation use cases.
 */
 type AttributeValue OctetString
 
-func (r AttributeValue) EqualFold(o AttributeValue) bool { return beqf(r,o) }
-func (r AttributeValue) Equal(o AttributeValue) bool     { return beq(r,o) }
+/*
+EqualFold returns a Boolean value indicative of both the receiver and
+input instances being equal without case-folding taken into account.
+*/
+func (r AttributeValue) EqualFold(o AttributeValue) bool { return beqf(r, o) }
+
+/*
+Equal returns a Boolean value indicative of both the receiver and
+input instanes being equal with case-folding taken into account.
+*/
+func (r AttributeValue) Equal(o AttributeValue) bool { return beq(r, o) }
 
 /*
 String returns the string representation of the receiver instance.
 */
 func (r AttributeValue) String() string { return string(r) }
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the contents of the receiver instance as an OCTET
+STRING.
+*/
 func (r AttributeValue) Encode() ([]byte, error) {
 	// Cast to underlying OctetString
 	return OctetString(r).Encode()
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated, and must bear the OCTET STRING tag (0x04).
+*/
 func (r *AttributeValue) Decode(enc []byte) error {
 	var o OctetString
 	var err error
@@ -622,6 +850,11 @@ type AttributeTypeAndValue struct {
 	Value AttributeValue
 }
 
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the contents of the receiver instance as a UNIVERSAL
+SEQUENCE.
+*/
 func (r AttributeTypeAndValue) Encode() ([]byte, error) {
 	// Encode type
 	typeEnc, err := OctetString(r.Type).Encode()
@@ -644,6 +877,11 @@ func (r AttributeTypeAndValue) Encode() ([]byte, error) {
 	return outer, err
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated, and must bear the UNIVERSAL SEQUENCE tag (0x30).
+*/
 func (r *AttributeTypeAndValue) Decode(enc []byte) error {
 	p := 0
 
@@ -727,28 +965,43 @@ func (r AttributeTypeAndValue) String() string {
 }
 
 /*
-Equal returns true if the [AttributeTypeAndValue] instance is equivalent to the other
-[AttributeTypeAndValue].
+Equal returns a Boolean value indictive of both the receiver and input values being
+equal.
 
 Case-folding of the underlying [AttributeType] instance is not significant, however
 case-folding of the underlying [AttributeValue] is.
 */
-func (r AttributeTypeAndValue) Equal(other AttributeTypeAndValue) bool {
-	return beqf(r.Type, other.Type) && beq(r.Value, other.Value)
+func (r AttributeTypeAndValue) Equal(o AttributeTypeAndValue) bool {
+	return beqf(r.Type, o.Type) && beq(r.Value, o.Value)
 }
 
 /*
-EqualFold returns true if the [AttributeTypeAndValue] instance is equivalent to the other
-[AttributeTypeAndValue].
+EqualFold returns a Boolean value indictive of both the receiver and input values being
+equal.
 
 Case of the underlying [AttributeType] and [AttributeValue] instances is not significant.
 */
-func (r AttributeTypeAndValue) EqualFold(other AttributeTypeAndValue) bool {
-	return beqf(r.Type, other.Type) && beqf(r.Value, other.Value)
+func (r AttributeTypeAndValue) EqualFold(o AttributeTypeAndValue) bool {
+	return beqf(r.Type, o.Type) && beqf(r.Value, o.Value)
 }
 
-// old go-ldap/v3/dn.go ATV code
+func isAttribute(in []byte) (is bool) {
+	if len(in) == 0 {
+		return false
+	}
 
+	switch {
+	case isAlpha(rune(in[0])):
+		is, _ = isDescr(string(in))
+	case isDigit(rune(in[0])):
+		_, err := marshalLDAPOID(in)
+		is = err == nil
+	}
+
+	return
+}
+
+// disclaimer: poached from go-ldap/dn.go
 func (r AttributeTypeAndValue) decodeEncodedString(str string) (string, error) {
 	b, err := hex.DecodeString(str)
 	if err != nil {
@@ -767,6 +1020,8 @@ func (r AttributeTypeAndValue) decodeEncodedString(str string) (string, error) {
 	return string(val), err
 }
 
+// disclaimer: poached from go-ldap/dn.go
+//
 // Remove leading and trailing spaces from the attribute type and value
 // and unescape any escaped characters in these fields
 //
@@ -846,6 +1101,8 @@ func (r AttributeTypeAndValue) decodeString(str string) (string, error) {
 	return bld.String(), nil
 }
 
+// disclaimer: poached from go-ldap/dn.go
+//
 // Escape a string according to RFC 4514
 func encodeATV(value []byte, isValue bool) []byte {
 	bld := bytes.Buffer{}
@@ -905,6 +1162,7 @@ func encodeATV(value []byte, isValue bool) []byte {
 	return bld.Bytes()
 }
 
+// disclaimer: poached from go-ldap/dn.go
 func stripLeadingAndTrailingSpaces(inVal string) string {
 	noSpaces := strings.Trim(inVal, " ")
 
@@ -926,20 +1184,4 @@ func stripLeadingAndTrailingSpaces(inVal string) string {
 	}
 
 	return noSpaces
-}
-
-func isAttribute(in []byte) (is bool) {
-	if len(in) == 0 {
-		return false
-	}
-
-	switch {
-	case isAlpha(rune(in[0])):
-		is, _ = isDescr(string(in))
-	case isDigit(rune(in[0])):
-		_, err := marshalLDAPOID(in)
-		is = err == nil
-	}
-
-	return
 }

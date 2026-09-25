@@ -38,7 +38,7 @@ func TestIsAttribute(t *testing.T) {
 		}
 	}
 
-	ad := AttributeDescription(`cn;lang-sl`)
+	ad := AttributeDescription(`cn;lang-sl;lang-jp;lang-cn`)
 	if !ad.Type().Valid() {
 		t.Fatalf("%s failed: valid attribute %q flagged as invalid", t.Name(), ad)
 	}
@@ -47,6 +47,29 @@ func TestIsAttribute(t *testing.T) {
 	ad2 := AttributeDescription(`givenname`)
 	_ = ad.EqualFold(ad2)
 	_ = ad.Equal(ad2)
+}
+
+func TestAttributeTag(t *testing.T) {
+	ad := AttributeDescription(`cn;lang-sl;lang-jp;lang-cn`)
+
+	tag := ad.Tag()
+	tags := tag.Split()
+
+	sl := []byte(`;LANG-sl`)
+	if has := tags.Contains(sl); !has {
+		t.Errorf("%s failed: unable to match tag %q", t.Name(), sl)
+	}
+
+	multi := AttributeTag(`;LANG-SL;lang-JP;LANG-cn`)
+	if eqls := tag.EqualFold(multi); !eqls {
+		t.Errorf("%s failed: unable to match multi tag (%q) in original tag %q", t.Name(), multi, tag)
+	}
+
+	joined := tags.Join()
+	if !joined.Equal(tag) {
+		t.Errorf("%s failed: unable to reliably join %q", t.Name(), tag)
+	}
+
 }
 
 func ExampleAttributeTypeAndValue_roundTripDER() {
