@@ -21,6 +21,23 @@ found within [SearchResultEntry] instances.
 type PartialAttributeList []PartialAttribute
 
 /*
+IndexOf returns the integer index occupied by the input [AttributeDescription],
+if found, else -1 is returned.
+
+Case is not significant in the matching process.
+*/
+func (r PartialAttributeList) IndexOf(at AttributeDescription) int {
+        var idx int = -1
+        for i := 0; i < len(r) && idx == -1; i++ {
+                if r[i].Type.EqualFold(at) {
+                        idx = i
+                }
+        }
+
+        return idx
+}
+
+/*
 Encode returns an instance of []byte alongside an error following an
 attempt to encode the contents of the receiver instance as a UNIVERSAL
 SEQUENCE.
@@ -112,6 +129,23 @@ within [AddRequest] instances.
 [§ 4.7 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.7
 */
 type AttributeList []Attribute
+
+/*
+IndexOf returns the integer index occupied by the input [AttributeDescription],
+if found, else -1 is returned.
+
+Case is not significant in the matching process.
+*/
+func (r AttributeList) IndexOf(at AttributeDescription) int {
+	var idx int = -1
+	for i := 0; i < len(r) && idx == -1; i++ {
+		if r[i].Type.EqualFold(at) {
+			idx = i
+		}
+	}
+
+	return idx
+}
 
 /*
 Process returns an instance of [AttributeList] alongside an error following
@@ -717,19 +751,22 @@ func (r AttributeTags) Join() AttributeTag {
 }
 
 /*
-Contains returns a Boolean value indicative of the input tag statement.
+IndexOf returns the integer index occupied by the input [AttributeTag],
+if found, else -1 is returned.
 
 Case-folding is not significant in the matching process, and any leading
 semicolons (ASCII hex. 3B, dec. 59) that are present will be disregarded.
 */
-func (r AttributeTags) Contains(tag AttributeTag) bool {
-	var has bool
+func (r AttributeTags) IndexOf(tag AttributeTag) int {
+	var idx int = -1
 	trimmed := bytes.TrimPrefix(tag, tSemi)
-	for i := 0; i < len(r) && !has; i++ {
-		has = r[i].EqualFold(trimmed)
+	for i := 0; i < len(r) && idx == -1; i++ {
+		if r[i].EqualFold(trimmed) {
+			idx = i
+		}
 	}
 
-	return has
+	return idx
 }
 
 /*

@@ -56,7 +56,7 @@ func TestAttributeTag(t *testing.T) {
 	tags := tag.Split()
 
 	sl := []byte(`;LANG-sl`)
-	if has := tags.Contains(sl); !has {
+	if idx := tags.IndexOf(sl); idx == -1 {
 		t.Errorf("%s failed: unable to match tag %q", t.Name(), sl)
 	}
 
