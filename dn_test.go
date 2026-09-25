@@ -12,16 +12,21 @@ func ExampleLDAPDN() {
 	fmt.Printf("RDN: %s\n", dn.RDN())
 
 	// Get the superior (parent) DN of the DN
-	fmt.Printf("SUP: %s\n", dn.Superior())
+	super := dn.Superior()
+	fmt.Printf("SUP: %s\n", super)
 
 	// Create a new subordinate DN below DN
 	newChildRDN := RelativeLDAPDN(`cn=Private mailing list`)
 	fmt.Printf("SUB: %s\n", dn.Subordinate(newChildRDN))
 
+	// Compare two DNs
+	fmt.Printf("DNs are the same: %t\n", dn.EqualFold(super))
+
 	// Output:
 	// RDN: cn=Jesse Coretta
 	// SUP: ou=Consultants,ou=Accounts,dc=example,dc=com
 	// SUB: cn=Private mailing list,cn=Jesse Coretta,ou=Consultants,ou=Accounts,dc=example,dc=com
+	// DNs are the same: false
 }
 
 func ExampleRelativeLDAPDN_roundTripBER() {
