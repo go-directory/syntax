@@ -19,6 +19,7 @@ var (
 	tQMark            = []byte("?")
 	tSpace            = []byte(" ")
 	tSharp            = []byte(`#`)
+	tSemi             = []byte(`;`)
 )
 
 var (
