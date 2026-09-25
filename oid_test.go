@@ -172,6 +172,13 @@ func TestObjectIdentifier(t *testing.T) {
 	}
 }
 
+func TestLDAPOID(t *testing.T) {
+	a, b := LDAPOID(`1.2.3.4.5`), LDAPOID(`1.2.3.4.45`)
+	if a.Equal(b) {
+		t.Errorf("%s failed: comparison returned true, want false", t.Name())
+	}
+}
+
 func TestObjectIdentifier_basicAny(t *testing.T) {
 	bigPen := newBigInt(int64(56521))
 	nfPen := numberForm{
