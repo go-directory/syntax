@@ -8,6 +8,7 @@ See the LICENSE.go-ldap-DN file in the repository root.
 */
 
 import (
+	"bytes"
 	"sort"
 	"strings"
 )
@@ -85,6 +86,46 @@ String returns the string representation of the receiver instance.
 */
 func (r LDAPDN) String() string { return b2s(r) }
 
+/*
+RDN returns only the [RelativeLDAPDN] component of the receiver instance.
+*/
+func (r LDAPDN) RDN() RelativeLDAPDN {
+	var rdn RelativeLDAPDN
+	sp := splitUnescapedBytes(r, tComma, tBSlash)
+	if len(sp) > 0 && len(sp[0]) > 0 {
+		rdn = RelativeLDAPDN(sp[0])
+	}
+
+	return rdn
+}
+
+/*
+Superior combines a truncates the leading [RelativeLDAPDN] component, returning
+the parent [LDAPDN].
+*/
+func (r LDAPDN) Superior() LDAPDN {
+	var sup LDAPDN
+	sp := splitUnescapedBytes(r, tComma, tBSlash)
+	if len(sp) > 1 {
+		sup = LDAPDN(bytes.Join(sp[1:], tComma))
+	}
+
+	return sup
+}
+
+/*
+Subordinate combines a [RelativeLDAPDN] with the receiver instance
+to assemble a new child [LDAPDN].
+*/
+func (r LDAPDN) Subordinate(child RelativeLDAPDN) LDAPDN {
+	rdn := LDAPDN(append(child, tComma...))
+	return append(rdn, r...)
+}
+
+/*
+Encode returns an instance of []byte alongside an error following an
+attempt to encode the receiver instance as an OCTET STRING.
+*/
 func (r LDAPDN) Encode() ([]byte, error) {
 	_, err := parseDN(b2s(r))
 	var out []byte
@@ -95,6 +136,11 @@ func (r LDAPDN) Encode() ([]byte, error) {
 	return out, err
 }
 
+/*
+Decode returns an error following an attempt to decode and write the
+input encoding to the receiver instance. The encoding must not be
+truncated and must bear the OCTET STRING tag (0x04).
+*/
 func (r *LDAPDN) Decode(enc []byte) error {
 	var o OctetString
 	var err error
@@ -106,7 +152,7 @@ func (r *LDAPDN) Decode(enc []byte) error {
 }
 
 /*
-RelativeLDAPDN implements the LDAPString representation of a relative
+RelativeLDAPDN implements the [LDAPString] representation of a relative
 distinguished name.
 */
 type RelativeLDAPDN LDAPString

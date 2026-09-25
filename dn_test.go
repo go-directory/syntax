@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func ExampleLDAPDN() {
+	dn := LDAPDN(`cn=Jesse Coretta,ou=Consultants,ou=Accounts,dc=example,dc=com`)
+
+	// Get the RDN of the DN
+	fmt.Printf("RDN: %s\n", dn.RDN())
+
+	// Get the superior (parent) DN of the DN
+	fmt.Printf("SUP: %s\n", dn.Superior())
+
+	// Create a new subordinate DN below DN
+	newChildRDN := RelativeLDAPDN(`cn=Private mailing list`)
+	fmt.Printf("SUB: %s\n", dn.Subordinate(newChildRDN))
+
+	// Output:
+	// RDN: cn=Jesse Coretta
+	// SUP: ou=Consultants,ou=Accounts,dc=example,dc=com
+	// SUB: cn=Private mailing list,cn=Jesse Coretta,ou=Consultants,ou=Accounts,dc=example,dc=com
+}
+
 func ExampleRelativeLDAPDN_roundTripBER() {
 	dn, err := NewRelativeLDAPDN([]byte("cn=Jesse Coretta+o=Acme Co"))
 	if err != nil {
