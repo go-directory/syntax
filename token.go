@@ -21,6 +21,8 @@ var (
 	tSpace            = []byte(" ")
 	tSharp            = []byte(`#`)
 	tSemi             = []byte(`;`)
+	tEquals           = []byte(`=`)
+	tEmpty            = []byte(``)
 )
 
 var (

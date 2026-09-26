@@ -54,8 +54,8 @@ func decodeRefinementDER(b []byte) (ref Refinement, err error) {
 			if t, pld, err = asn1.ReadConstructedTLV(payload, &q); err == nil {
 				// reconstruct full TLV bytes for recursive decode
 				var full []byte
-				full = asn1.WriteConstructedTag(full, t.Class, t.Constructed, t.Tag)
-				full = asn1.WriteConstructedLength(full, len(pld))
+				full = asn1.WriteTag(full, t.Class, t.Constructed, t.Tag)
+				full = asn1.WriteLength(full, len(pld))
 				full = append(full, pld...)
 
 				var child Refinement

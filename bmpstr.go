@@ -2,8 +2,6 @@ package syntax
 
 import (
 	"unicode/utf8"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -28,7 +26,7 @@ String returns the string representation of the receiver instance.
 This involves unmarshaling the receiver into a string return value.
 */
 func (r BMPString) String() string {
-	if len(r) < 3 || r[0] != asn1.TagBMPString {
+	if len(r) < 3 || r[0] != tBMP {
 		return ""
 	}
 
@@ -62,15 +60,15 @@ func (r BMPString) Encode() ([]byte, error) {
 	switch {
 	case chars < 128:
 		out = make([]byte, 2+len(r))
-		out[0] = asn1.TagBMPString
+		out[0] = tBMP
 		out[1] = byte(chars)
 		copy(out[2:], r)
 	default:
-		n := asn1.LengthBytes(chars)
+		n := lenBytes(chars)
 		out = make([]byte, 1+1+n+len(r))
-		out[0] = asn1.TagBMPString
+		out[0] = tBMP
 		out[1] = 0x80 | byte(n)
-		asn1.WritePrimitiveLength(out[2:2+n], chars)
+		writeLen(out[2:2+n], chars)
 		copy(out[2+n:], r)
 	}
 
@@ -83,10 +81,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the BMPString tag (0x31).
 */
 func (r *BMPString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != asn1.TagBMPString {
+	if len(enc) < 2 || enc[0] != tBMP {
 		return errBMPCodec
 	}
-	chars, n := asn1.ReadPrimitiveLength(enc[1:])
+	chars, n := readLen(enc[1:])
 	if n == 0 {
 		return errBMPCodec
 	}
@@ -124,14 +122,14 @@ func assertBMPString(x any) (enc BMPString, err error) {
 		e = []byte(tv)
 	case BMPString:
 		if L := len(tv); L == 2 {
-			if tv[0] != asn1.TagBMPString || tv[1] != 0x0 {
+			if tv[0] != tBMP || tv[1] != 0x0 {
 				err = syntaxError("Invalid ASN.1 tag or length octet for empty string")
 				return
 			}
-			enc = BMPString{asn1.TagBMPString, 0x0}
+			enc = BMPString{tBMP, 0x0}
 			return
 		} else if L > 0 {
-			if tv[0] != asn1.TagBMPString {
+			if tv[0] != tBMP {
 				err = syntaxError("Invalid ASN.1 tag")
 				return
 			} else if int(tv[1]) != len(tv[2:]) {
@@ -146,12 +144,12 @@ func assertBMPString(x any) (enc BMPString, err error) {
 
 	if len(e) == 0 {
 		// Zero length values are OK
-		enc = BMPString{asn1.TagBMPString, 0x0}
+		enc = BMPString{tBMP, 0x0}
 		return
 	}
 
 	var result []byte
-	result = append(result, asn1.TagBMPString) // Add BMPString tag (byte(30))
+	result = append(result, tBMP) // Add BMPString tag (byte(30))
 
 	// UTF-8 to UTF-16BE
 	var utf16be []byte

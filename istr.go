@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 IA5String implements [§ 3.2 of RFC 4517]:
 
@@ -76,7 +72,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 IA5String value.
 */
 func (r IA5String) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagIA5String, r)
+	return encodeP(tIA5, r)
 }
 
 /*
@@ -85,10 +81,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the IA5String tag (0x16).
 */
 func (r *IA5String) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != asn1.TagIA5String {
+	if len(enc) < 2 || enc[0] != tIA5 {
 		return errIA5Decode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errIA5Decode
 	}

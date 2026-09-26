@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"unicode/utf8"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -77,7 +75,7 @@ func (r UniversalString) Encode() ([]byte, error) {
 		i += sz
 	}
 
-	return asn1.EncodePrimitive(asn1.TagUniversalString, out[:pos])
+	return encodeP(tUni, out[:pos])
 }
 
 func universalStringCharacterOutOfBounds(r rune) (err error) {
@@ -95,11 +93,11 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the UniversalString tag (0x1C).
 */
 func (r *UniversalString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != asn1.TagUniversalString {
+	if len(enc) < 3 || enc[0] != tUni {
 		return errUnivDecode
 	}
 
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errUnivDecode
 	}

@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 FilterDecode returns an instance of [Filter] alongside an error
 following an attempt to decode and write the input enc bytes.
@@ -15,7 +11,7 @@ func FilterDecode(enc []byte) (Filter, error) {
 	p := 0
 
 	var f Filter
-	tag, _, err := asn1.ReadConstructedTLV(enc, &p)
+	tag, _, err := readCTLV(enc, &p)
 	if err == nil {
 		f, err = decodeFilterByTag(tag.Tag, enc)
 	}
@@ -55,8 +51,8 @@ func (r FilterNot) Encode() ([]byte, error) {
 	enc, err := r.Filter.Encode()
 	var out []byte
 	if err == nil {
-		out, err = asn1.WrapTLV(enc,
-			aTag(asn1.ClassContextSpecific,
+		out, err = wrapTLV(enc,
+			aTag(classC,
 				true, uint32(r.Tag())))
 	}
 
@@ -66,16 +62,15 @@ func (r FilterNot) Encode() ([]byte, error) {
 func (r *FilterNot) Decode(enc []byte) error {
 	p := 0
 
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific, uint32(r.Tag()))
+	payload, err := readECTLV(enc, &p, classC, uint32(r.Tag()))
 
 	if err == nil {
 
 		p2 := 0
 		start := p2
 
-		var childTag asn1.Tag
-		if childTag, _, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
+		var childTag Tag
+		if childTag, _, err = readCTLV(payload, &p2); err == nil {
 			var f Filter
 			if f, err = decodeFilterByTag(childTag.Tag, payload[start:p2]); err == nil {
 				r.Filter = f
@@ -100,9 +95,9 @@ func encodeFilterSet(tag uint32, fs []Filter) ([]byte, error) {
 
 	var out []byte
 	if err == nil {
-		out, err = asn1.WrapTLV(payload,
-			aTag(asn1.ClassUniversal, true, uint32(asn1.TagSet)),
-			aTag(asn1.ClassContextSpecific, true, tag))
+		out, err = wrapTLV(payload,
+			aTag(classU, true, uint32(tSet)),
+			aTag(classC, true, tag))
 	}
 
 	return out, err
@@ -110,9 +105,9 @@ func encodeFilterSet(tag uint32, fs []Filter) ([]byte, error) {
 
 func decodeFilterSet(tag uint32, enc []byte) ([]Filter, error) {
 
-	payload, err := asn1.UnwrapTLV(enc,
-		aTag(asn1.ClassContextSpecific, true, tag),
-		aTag(asn1.ClassUniversal, true, uint32(asn1.TagSet)))
+	payload, err := unwrapTLV(enc,
+		aTag(classC, true, tag),
+		aTag(classU, true, uint32(tSet)))
 
 	var out []Filter
 	if err == nil {
@@ -120,8 +115,8 @@ func decodeFilterSet(tag uint32, enc []byte) ([]Filter, error) {
 		for p < len(payload) && err == nil {
 			start := p
 
-			var childTag asn1.Tag
-			if childTag, _, err = asn1.ReadConstructedTLV(payload, &p); err == nil {
+			var childTag Tag
+			if childTag, _, err = readCTLV(payload, &p); err == nil {
 				var f Filter
 				f, err = decodeFilterByTag(childTag.Tag, payload[start:p])
 				if err == nil {
@@ -193,8 +188,8 @@ func (r FilterSubstrings) Encode() ([]byte, error) {
 		var sub []byte
 		if sub, err = r.Substrings.Encode(); err == nil {
 			payload = append(payload, sub...)
-			outer, err = asn1.WrapTLV(payload, uSeqTag(),
-				aTag(asn1.ClassContextSpecific, true, uint32(r.Tag())))
+			outer, err = wrapTLV(payload, uSeqTag(),
+				aTag(classC, true, uint32(r.Tag())))
 		}
 	}
 
@@ -202,17 +197,17 @@ func (r FilterSubstrings) Encode() ([]byte, error) {
 }
 
 func (r *FilterSubstrings) Decode(enc []byte) error {
-	payload, err := asn1.UnwrapTLV(enc,
-		aTag(asn1.ClassContextSpecific, true, uint32(r.Tag())),
+	payload, err := unwrapTLV(enc,
+		aTag(classC, true, uint32(r.Tag())),
 		uSeqTag())
 
 	if err == nil {
 		p := 0
 		var subs []byte
 		for p < len(payload) && err == nil {
-			var dTag asn1.Tag
+			var dTag Tag
 			var dPayload []byte
-			if dTag, dPayload, err = asn1.ReadConstructedTLV(payload, &p); err == nil {
+			if dTag, dPayload, err = readCTLV(payload, &p); err == nil {
 				switch dTag.Tag {
 				case 4:
 					// 0x04 OCTET STRING
@@ -220,7 +215,7 @@ func (r *FilterSubstrings) Decode(enc []byte) error {
 				case 16:
 					// 0x10 SEQUENCE
 					var wrapped []byte
-					wrapped, err = asn1.WrapTLV(dPayload, uSeqTag())
+					wrapped, err = wrapTLV(dPayload, uSeqTag())
 
 					subs = append(subs, wrapped...)
 				}
@@ -242,9 +237,9 @@ func (r FilterPresent) Encode() ([]byte, error) {
 	if err == nil {
 		payload = append(payload, encDesc...)
 
-		outer, err = asn1.WrapTLV(payload,
+		outer, err = wrapTLV(payload,
 			uSeqTag(),
-			aTag(asn1.ClassUniversal, true, uint32(r.Tag())))
+			aTag(classU, true, uint32(r.Tag())))
 	}
 
 	return outer, err
@@ -253,10 +248,10 @@ func (r FilterPresent) Encode() ([]byte, error) {
 func (r *FilterPresent) Decode(enc []byte) error {
 
 	// Outer SEQUENCE
-	payload, err := asn1.UnwrapTLV(enc,
-		aTag(asn1.ClassUniversal, true, uint32(r.Tag())),
+	payload, err := unwrapTLV(enc,
+		aTag(classU, true, uint32(r.Tag())),
 		uSeqTag(),
-		aTag(asn1.ClassUniversal, false, uint32(asn1.TagOctetString)))
+		aTag(classU, false, uint32(tOct)))
 
 	if err == nil {
 		r.Desc = AttributeDescription(payload)
@@ -272,14 +267,13 @@ func (r FilterGreaterOrEqual) Encode() ([]byte, error) {
 		// Strip the outer SEQUENCE (UNIVERSAL, constructed, tag = TagSequence)
 		p := 0
 		var innerPayload []byte
-		innerPayload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
+		innerPayload, err = readECTLV(enc, &p, classU, uint32(tSeq))
 
 		if err == nil {
 			// wrap as Filter greaterOrEqual: [5] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 5
-			out, err = asn1.WrapTLV(innerPayload,
-				aTag(asn1.ClassContextSpecific, true, uint32(r.Tag())))
+			out, err = wrapTLV(innerPayload,
+				aTag(classC, true, uint32(r.Tag())))
 		}
 	}
 
@@ -289,15 +283,14 @@ func (r FilterGreaterOrEqual) Encode() ([]byte, error) {
 func (r *FilterGreaterOrEqual) Decode(enc []byte) error {
 	// Outer wrapper: [5] AttributeValueAssertion
 	p := 0
-	inner, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific, uint32(r.Tag()))
+	inner, err := readECTLV(enc, &p, classC, uint32(r.Tag()))
 
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
 		var seq []byte
-		seq, err = asn1.WrapTLV(inner, uSeqTag())
+		seq, err = wrapTLV(inner, uSeqTag())
 
 		if err == nil {
 			var ava AttributeValueAssertion
@@ -316,14 +309,13 @@ func (r FilterLessOrEqual) Encode() ([]byte, error) {
 	if err == nil {
 		var payload []byte
 		p := 0
-		payload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
+		payload, err = readECTLV(enc, &p, classU, uint32(tSeq))
 
 		if err == nil {
 			// Wrap as Filter lessOrEqual: [6] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 6
-			out, err = asn1.WrapTLV(payload,
-				aTag(asn1.ClassContextSpecific, true, uint32(r.Tag())))
+			out, err = wrapTLV(payload,
+				aTag(classC, true, uint32(r.Tag())))
 		}
 	}
 
@@ -334,15 +326,15 @@ func (r *FilterLessOrEqual) Decode(enc []byte) error {
 	p := 0
 
 	// Outer wrapper: [6] AttributeValueAssertion
-	inner, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific, uint32(r.Tag()))
+	inner, err := readECTLV(enc, &p,
+		classC, uint32(r.Tag()))
 
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
 		var seq []byte
-		seq, err = asn1.WrapTLV(inner, uSeqTag())
+		seq, err = wrapTLV(inner, uSeqTag())
 
 		if err == nil {
 			var ava AttributeValueAssertion
@@ -362,14 +354,14 @@ func (r FilterApproximateMatch) Encode() ([]byte, error) {
 		p := 0
 		// Strip the outer SEQUENCE (UNIVERSAL, constructed, tag = TagSequence)
 		var payload []byte
-		payload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
+		payload, err = readECTLV(enc, &p,
+			classU, uint32(tSeq))
 
 		if err == nil {
 			// Wrap as Filter approximateMatch: [8] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 8
-			out, err = asn1.WrapTLV(payload,
-				aTag(asn1.ClassContextSpecific,
+			out, err = wrapTLV(payload,
+				aTag(classC,
 					true, uint32(r.Tag())))
 		}
 	}
@@ -381,15 +373,15 @@ func (r *FilterApproximateMatch) Decode(enc []byte) error {
 	p := 0
 
 	// Outer wrapper: [8] AttributeValueAssertion
-	inner, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific, uint32(r.Tag()))
+	inner, err := readECTLV(enc, &p,
+		classC, uint32(r.Tag()))
 
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
 		var seq []byte
-		seq, err = asn1.WrapTLV(inner, uSeqTag())
+		seq, err = wrapTLV(inner, uSeqTag())
 
 		if err == nil {
 			var ava AttributeValueAssertion
@@ -409,14 +401,14 @@ func (r FilterEqualityMatch) Encode() ([]byte, error) {
 		p := 0
 		// Strip the outer SEQUENCE (UNIVERSAL, constructed, tag = TagSequence)
 		var payload []byte
-		payload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
+		payload, err = readECTLV(enc, &p,
+			classU, uint32(tSeq))
 
 		if err == nil {
 			// Wrap as Filter equalityMatch: [3] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 3
-			out, err = asn1.WrapTLV(payload,
-				aTag(asn1.ClassContextSpecific,
+			out, err = wrapTLV(payload,
+				aTag(classC,
 					true, uint32(r.Tag())))
 		}
 	}
@@ -428,15 +420,15 @@ func (r *FilterEqualityMatch) Decode(enc []byte) error {
 	p := 0
 
 	// Outer wrapper: [3] AttributeValueAssertion
-	inner, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific, uint32(r.Tag()))
+	inner, err := readECTLV(enc, &p,
+		classC, uint32(r.Tag()))
 
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
 		var seq []byte
-		seq, err = asn1.WrapTLV(inner, uSeqTag())
+		seq, err = wrapTLV(inner, uSeqTag())
 
 		if err == nil {
 			var ava AttributeValueAssertion
@@ -455,14 +447,14 @@ func (r FilterExtensibleMatch) Encode() ([]byte, error) {
 	if err == nil {
 		p := 0
 		var payload []byte
-		payload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
+		payload, err = readECTLV(enc, &p,
+			classU, uint32(tSeq))
 
 		if err == nil {
 			// Wrap as Filter extensibleMatch: [9] MatchingRuleAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 9
-			out, err = asn1.WrapTLV(payload,
-				aTag(asn1.ClassContextSpecific,
+			out, err = wrapTLV(payload,
+				aTag(classC,
 					true, uint32(tagFilterExtensibleMatch)))
 		}
 	}
@@ -474,16 +466,14 @@ func (r *FilterExtensibleMatch) Decode(enc []byte) error {
 	p := 0
 
 	// Outer wrapper: [9] MatchingRuleAssertion
-	inner, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassContextSpecific,
-		uint32(tagFilterExtensibleMatch))
+	inner, err := readECTLV(enc, &p, classC, uint32(tagFilterExtensibleMatch))
 
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of MatchingRuleAssertion.
 		// MatchingRuleAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
 		var seq []byte
-		seq, err = asn1.WrapTLV(inner, uSeqTag())
+		seq, err = wrapTLV(inner, uSeqTag())
 
 		if err == nil {
 			var mra MatchingRuleAssertion
@@ -516,15 +506,14 @@ func (r AttributeValueAssertion) Encode() ([]byte, error) {
 	payload = append(payload, encVal...)
 
 	// wrap both in SEQUENCE
-	return asn1.WrapTLV(payload, uSeqTag())
+	return wrapTLV(payload, uSeqTag())
 }
 
 func (r *AttributeValueAssertion) Decode(enc []byte) error {
 
 	// Outer SEQUENCE
 	p := 0
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
+	payload, err := readECTLV(enc, &p, classU, uint32(tSeq))
 
 	if err == nil {
 		p2 := 0
@@ -533,15 +522,15 @@ func (r *AttributeValueAssertion) Decode(enc []byte) error {
 
 		// First child: attributeDesc (OCTET STRING)
 		var childPayload []byte
-		childPayload, err = asn1.ReadExpectedPrimitiveTLV(payload, &p2,
-			asn1.ClassUniversal, uint32(asn1.TagOctetString))
+		childPayload, err = readEPTLV(payload, &p2,
+			classU, uint32(tOct))
 
 		if err == nil {
 			r.Desc = childPayload
 
 			// Second child: assertionValue (OCTET STRING)
-			childPayload, err = asn1.ReadExpectedPrimitiveTLV(payload, &p2,
-				asn1.ClassUniversal, uint32(asn1.TagOctetString))
+			childPayload, err = readEPTLV(payload, &p2,
+				classU, uint32(tOct))
 
 			if err == nil {
 				r.Value = childPayload
@@ -564,13 +553,13 @@ func (r MatchingRuleAssertion) Encode() ([]byte, error) {
 		}
 
 		p := 0
-		_, innerPayload, err := asn1.ReadConstructedTLV(inner, &p)
+		_, innerPayload, err := readCTLV(inner, &p)
 		if err != nil {
 			return nil, err
 		}
 
 		payload = append(payload,
-			asn1.WriteConstructedTLV(nil, asn1.ClassContextSpecific, false, 1, innerPayload)...)
+			writeCTLV(nil, classC, false, 1, innerPayload)...)
 	}
 
 	// [2] AttributeDescription OPTIONAL
@@ -582,13 +571,13 @@ func (r MatchingRuleAssertion) Encode() ([]byte, error) {
 		}
 
 		p := 0
-		_, innerPayload, err := asn1.ReadConstructedTLV(inner, &p)
+		_, innerPayload, err := readCTLV(inner, &p)
 		if err != nil {
 			return nil, err
 		}
 
 		payload = append(payload,
-			asn1.WriteConstructedTLV(nil, asn1.ClassContextSpecific, false, 2, innerPayload)...)
+			writeCTLV(nil, classC, false, 2, innerPayload)...)
 	}
 
 	// [3] AssertionValue (OCTET STRING)
@@ -599,13 +588,13 @@ func (r MatchingRuleAssertion) Encode() ([]byte, error) {
 	}
 
 	p := 0
-	_, innerPayload, err := asn1.ReadConstructedTLV(inner, &p)
+	_, innerPayload, err := readCTLV(inner, &p)
 	if err != nil {
 		return nil, err
 	}
 
 	payload = append(payload,
-		asn1.WriteConstructedTLV(nil, asn1.ClassContextSpecific, false, 3, innerPayload)...)
+		writeCTLV(nil, classC, false, 3, innerPayload)...)
 
 	// [4] BOOLEAN DEFAULT FALSE
 	if r.DNAttributes != Boolean(false) {
@@ -615,25 +604,24 @@ func (r MatchingRuleAssertion) Encode() ([]byte, error) {
 		}
 
 		p := 0
-		_, innerPayload, err := asn1.ReadConstructedTLV(inner, &p)
+		_, innerPayload, err := readCTLV(inner, &p)
 		if err != nil {
 			return nil, err
 		}
 
 		payload = append(payload,
-			asn1.WriteConstructedTLV(nil, asn1.ClassContextSpecific, false, 4, innerPayload)...)
+			writeCTLV(nil, classC, false, 4, innerPayload)...)
 	}
 
 	// Wrap in universal SEQUENCE
-	return asn1.WrapTLV(payload, uSeqTag())
+	return wrapTLV(payload, uSeqTag())
 }
 
 func (r *MatchingRuleAssertion) Decode(enc []byte) error {
 	p := 0
 
 	// Outer SEQUENCE
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
+	payload, err := readECTLV(enc, &p, classU, uint32(tSeq))
 
 	if err == nil {
 		// Reset receiver
@@ -641,29 +629,29 @@ func (r *MatchingRuleAssertion) Decode(enc []byte) error {
 
 		p2 := 0
 		for p2 < len(payload) && err == nil {
-			var childTag asn1.Tag
+			var childTag Tag
 			var childPayload []byte
-			if childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2); err != nil {
+			if childTag, childPayload, err = readCTLV(payload, &p2); err != nil {
 				break
 			}
 
-			if childTag.Class != asn1.ClassContextSpecific {
+			if childTag.Class != classC {
 				err = asn1Error("MatchingRuleAssertion.Decode: wrong class: got ",
 					itoa(int(childTag.Class)), ", want ",
-					itoa(int(asn1.ClassContextSpecific)))
+					itoa(int(classC)))
 				break
 			}
 
 			switch childTag.Tag {
 			case 1: // matchingRule [1] MatchingRuleId OPTIONAL
-				if err = childTag.Expect(asn1.ClassContextSpecific, false, 1); err == nil {
+				if err = childTag.Expect(classC, false, 1); err == nil {
 					// childPayload already holds the raw OCTET STRING value
 					r.MatchingRule = MatchingRuleID(childPayload)
 				}
 
 			case 2: // type [2] AttributeDescription OPTIONAL
-				if err = childTag.Expect(asn1.ClassContextSpecific, false, 2); err == nil {
-					inner := asn1.WriteConstructedTLV(nil, asn1.ClassUniversal, false, uint32(asn1.TagOctetString), childPayload)
+				if err = childTag.Expect(classC, false, 2); err == nil {
+					inner := writeCTLV(nil, classU, false, uint32(tOct), childPayload)
 
 					var ad AttributeDescription
 					err = ad.Decode(inner)
@@ -671,14 +659,14 @@ func (r *MatchingRuleAssertion) Decode(enc []byte) error {
 				}
 
 			case 3: // matchValue [3] AssertionValue
-				if err = childTag.Expect(asn1.ClassContextSpecific, false, 3); err == nil {
+				if err = childTag.Expect(classC, false, 3); err == nil {
 					// childPayload already holds the raw OCTET STRING value
 					r.MatchValue = AssertionValue(childPayload)
 				}
 
 			case 4: // dnAttributes [4] BOOLEAN DEFAULT FALSE
-				if err = childTag.Expect(asn1.ClassContextSpecific, false, 4); err == nil {
-					inner := asn1.WriteConstructedTLV(nil, asn1.ClassUniversal, false, uint32(asn1.TagBoolean), childPayload)
+				if err = childTag.Expect(classC, false, 4); err == nil {
+					inner := writeCTLV(nil, classU, false, uint32(tBool), childPayload)
 
 					var b Boolean
 					err = b.Decode(inner)

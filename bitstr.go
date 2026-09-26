@@ -7,10 +7,6 @@ Note that some of this originated in Go's encoding/asn1 package,
 namely the BitString.At and BitString.RightAlign methods.
 */
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 BitString implements [§ 3.3.2 of RFC 4517] and [§ 22 of ITU-T Rec. X.680].
 
@@ -82,7 +78,7 @@ func (r BitString) Encode() ([]byte, error) {
 	v[0] = byte(pad)
 	copy(v[1:], r.Bytes)
 
-	return asn1.EncodePrimitive(asn1.TagBitString, v)
+	return encodeP(tBit, v)
 }
 
 /*
@@ -93,8 +89,7 @@ not be truncated, and must bear the ASN.1 BIT STRING tag (0x03).
 func (r *BitString) Decode(enc []byte) error {
 	p := 0
 
-	v, err := asn1.ReadExpectedPrimitiveTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagBitString))
+	v, err := readEPTLV(enc, &p, classU, uint32(tBit))
 	if err != nil {
 		return err
 	}

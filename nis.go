@@ -2,8 +2,6 @@ package syntax
 
 import (
 	"strings"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -133,9 +131,8 @@ func (r NetgroupTriple) Encode() ([]byte, error) {
 
 			// wrap it in a context tag
 			var wrap []byte
-			wrap, err = asn1.WrapTLV(enc,
-				aTag(asn1.ClassContextSpecific,
-					false, uint32(idx)))
+			wrap, err = wrapTLV(enc,
+				aTag(classC, false, uint32(idx)))
 			if err != nil {
 				break
 			}
@@ -144,22 +141,22 @@ func (r NetgroupTriple) Encode() ([]byte, error) {
 	}
 
 	if err == nil {
-		out, err = asn1.WrapTLV(payload, uSeqTag())
+		out, err = wrapTLV(payload, uSeqTag())
 	}
 
 	return out, err
 }
 
 func (r *NetgroupTriple) Decode(enc []byte) error {
-	payload, err := asn1.UnwrapTLV(enc, uSeqTag())
+	payload, err := unwrapTLV(enc, uSeqTag())
 	if err == nil {
 		p := 0
 		for i := 0; i < 3 && err == nil; i++ {
 			var tlv []byte
-			tlv, err = asn1.ReadExpectedPrimitiveTLV(
+			tlv, err = readEPTLV(
 				payload,
 				&p,
-				asn1.ClassContextSpecific,
+				classC,
 				uint32(i))
 
 			if err == nil {
@@ -363,11 +360,11 @@ func (r BootParameter) Encode() ([]byte, error) {
 		payload = append(payload, enc...)
 	}
 
-	return asn1.WrapTLV(payload, uSeqTag())
+	return wrapTLV(payload, uSeqTag())
 }
 
 func (r *BootParameter) Decode(enc []byte) error {
-	payload, err := asn1.UnwrapTLV(enc, uSeqTag())
+	payload, err := unwrapTLV(enc, uSeqTag())
 	if err != nil {
 		return err
 	}
@@ -379,12 +376,12 @@ func (r *BootParameter) Decode(enc []byte) error {
 		}
 
 		// Expect IA5 tag
-		if payload[p] != asn1.TagIA5String {
+		if payload[p] != tIA5 {
 			return errIA5Decode
 		}
 
 		// Read IA5 length
-		l, n := asn1.ReadPrimitiveLength(payload[p+1:])
+		l, n := readLen(payload[p+1:])
 		if n == 0 || len(payload) < p+1+n+l {
 			return errIA5Decode
 		}

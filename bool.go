@@ -93,7 +93,7 @@ func (r *Boolean) Decode(enc []byte) error {
 	if len(enc) != 3 || enc[0] != asn1.TagBoolean {
 		return errBoolDecode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := asn1.ReadLength(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errBoolDecode
 	}

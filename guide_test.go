@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -19,6 +20,44 @@ func TestEnhancedGuide(t *testing.T) {
 	if _, err := NewEnhancedGuide(`account#!(?true&?false&2.5.4.0$EQ)|?true#wholeSybtree`); err == nil {
 		t.Errorf("%s failed: expected error, got nil", t.Name())
 	}
+}
+
+func ExampleEnhancedGuide_roundTripBER() {
+	eg, _ := NewEnhancedGuide(`0.9.2342.19200300.100.4.5#(!(?true&?false&2.5.4.0$EQ)|?true)#wholeSubtree`)
+
+	enc, err := eg.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec EnhancedGuide
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s\n", dec)
+	// Output: 0.9.2342.19200300.100.4.5#(!(?true&?false&2.5.4.0$EQ)|?true)#wholeSubtree
+}
+
+func ExampleGuide_roundTripBER() {
+	og, _ := NewGuide(`0.9.2342.19200300.100.4.5#(!(?true&?false&2.5.4.0$EQ)|?true)`)
+
+	enc, err := og.Encode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var dec Guide
+	if err = dec.Decode(enc); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("%s\n", dec)
+	// Output: 0.9.2342.19200300.100.4.5#(!(?true&?false&2.5.4.0$EQ)|?true)
 }
 
 func TestGuide(t *testing.T) {

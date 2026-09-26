@@ -8,8 +8,6 @@ import (
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -63,7 +61,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 UTF8String value.
 */
 func (r UTF8String) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagUTF8String, r)
+	return encodeP(tUTF8, r)
 }
 
 /*
@@ -72,10 +70,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the UTF8String tag (0x0c).
 */
 func (r *UTF8String) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != asn1.TagUTF8String {
+	if len(enc) < 3 || enc[0] != tUTF8 {
 		return errUTF8Decode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errUTF8Decode
 	}

@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 isT61Single returns a Boolean value indicative of a character match between input
 rune r and one of the runes present within the t61NonContiguous global []rune
@@ -52,7 +48,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 T61String value.
 */
 func (r TeletexString) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagT61String, r)
+	return encodeP(tT61, r)
 }
 
 /*
@@ -61,10 +57,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the T61String tag (0x14).
 */
 func (r *TeletexString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != asn1.TagT61String {
+	if len(enc) < 3 || enc[0] != tT61 {
 		return errT61Decode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errT61Decode
 	}

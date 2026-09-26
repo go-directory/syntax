@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 Enumerated implements the ASN.1 ENUMERATED type (tag 10), per [§ 20 of
 ITU-T Rec. X.680]:
@@ -21,7 +17,7 @@ attempt to encode the receiver instance as an ASN.1 ENUMERATED value.
 */
 
 func (r Enumerated) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagEnumerated, encodeEnum(int(r)))
+	return encodeP(tEnum, encodeEnum(int(r)))
 }
 
 /*
@@ -30,10 +26,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the ENUMERATED tag (0x0A).
 */
 func (r *Enumerated) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != asn1.TagEnumerated {
+	if len(enc) < 2 || enc[0] != tEnum {
 		return errEnumDecode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errEnumDecode
 	}

@@ -1,10 +1,7 @@
 package syntax
 
 import (
-	"strconv"
 	"strings"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -45,7 +42,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 NumericString value.
 */
 func (r NumericString) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagNumericString, r)
+	return encodeP(tNum, r)
 }
 
 /*
@@ -54,10 +51,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the NumericString tag (0x12).
 */
 func (r *NumericString) Decode(enc []byte) error {
-	if len(enc) < 3 || enc[0] != asn1.TagNumericString {
+	if len(enc) < 3 || enc[0] != tNum {
 		return errNumericDecode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errNumericDecode
 	}
@@ -100,12 +97,12 @@ func assertNumericString(x any) (raw []byte, err error) {
 		}
 		var cint int64
 		if cint, err = castInt64(tv); err == nil {
-			raw = []byte(strconv.FormatInt(cint, 10))
+			raw = []byte(fint(cint, 10))
 		}
 	case uint, uint8, uint16, uint32, uint64:
 		var cuint uint64
 		if cuint, err = castUint64(tv); err == nil {
-			raw = []byte(strconv.FormatUint(cuint, 10))
+			raw = []byte(fuint(cuint, 10))
 		}
 	case []byte:
 		err = badLen(len(tv))

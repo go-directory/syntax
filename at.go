@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"strings"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -43,17 +41,21 @@ attempt to encode the contents of the receiver instance as a UNIVERSAL
 SEQUENCE.
 */
 func (r PartialAttributeList) Encode() ([]byte, error) {
-	payload := make([]byte, 0)
+	enc := make([]byte, 0)
+	var err error
 
-	for _, pa := range r {
-		enc, err := pa.Encode()
-		if err != nil {
-			return nil, err
+	for i := 0; i < len(r) && err == nil; i++ {
+		var val []byte
+		if val, err = r[i].Encode(); err == nil {
+			enc = append(enc, val...)
 		}
-		payload = append(payload, enc...)
 	}
 
-	return asn1.WrapTLV(payload, uSeqTag())
+	if err == nil {
+		enc, err = wrapTLV(enc, uSeqTag())
+	}
+
+	return enc, err
 }
 
 /*
@@ -64,8 +66,8 @@ truncated and must bear the UNIVERSAL SEQUENCE tag (0x30).
 func (r *PartialAttributeList) Decode(enc []byte) error {
 	p := 0
 
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
+	payload, err := readECTLV(enc, &p,
+		classU, uint32(tSeq))
 
 	if err != nil {
 		return err
@@ -76,8 +78,8 @@ func (r *PartialAttributeList) Decode(enc []byte) error {
 
 	for p2 < len(payload) && err == nil {
 		var childPayload []byte
-		if childPayload, err = asn1.ReadExpectedConstructedTLV(payload, &p2,
-			asn1.ClassUniversal, uint32(asn1.TagSequence)); err == nil {
+		if childPayload, err = readECTLV(payload, &p2,
+			classU, uint32(tSeq)); err == nil {
 			var pa PartialAttribute
 			if err = pa.Decode(childPayload); err == nil {
 				*r = append(*r, pa)
@@ -199,19 +201,21 @@ Encode returns an instance of []byte alongside an error following an attempt
 to encode the contents of the receiver instance as a UNIVERSAL SEQUENCE OF.
 */
 func (r AttributeList) Encode() ([]byte, error) {
-	// Encode each PartialAttribute
-	payload := make([]byte, 0)
+	enc := make([]byte, 0)
+	var err error
 
-	for _, pa := range r {
-		enc, err := pa.Encode()
-		if err != nil {
-			return nil, err
+	for i := 0; i < len(r) && err == nil; i++ {
+		var val []byte
+		if val, err = r[i].Encode(); err == nil {
+			enc = append(enc, val...)
 		}
-		payload = append(payload, enc...)
 	}
 
-	// Wrap in SEQUENCE OF
-	return asn1.WrapTLV(payload, uSeqTag())
+	if err == nil {
+		enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE OF
+	}
+
+	return enc, err
 }
 
 /*
@@ -220,30 +224,17 @@ encoding to the receiver instance. The encoding must not be truncated and
 must bear the UNIVERSAL SEQUENCE OF tag (0x30).
 */
 func (r *AttributeList) Decode(enc []byte) error {
-	p := 0
-
-	// Read outer SEQUENCE OF or fail
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
-
-	if err != nil {
-		return err
-	}
-
-	// Decode children
-	*r = (*r)[:0]
-	p2 := 0
-
-	for p2 < len(payload) && err == nil {
-		// Each child is a PartialAttribute (SEQUENCE)
-		var pa PartialAttribute
-
-		// Read the child TLV
-		var childPayload []byte
-		if childPayload, err = asn1.ReadExpectedConstructedTLV(payload, &p2,
-			asn1.ClassUniversal, uint32(asn1.TagSequence)); err == nil {
-			if err = pa.Decode(childPayload); err == nil {
-				*r = append(*r, pa)
+	payload, err := unwrapTLV(enc, uSeqTag()) // SEQUENCE OF
+	if err == nil {
+		p := 0
+		for p < len(payload) && err == nil {
+			var val []byte
+			val, err = readECTLV(payload, &p, classU, uint32(tSeq), true) // SEQUENCE, don't trim head
+			if err == nil {
+				var pa PartialAttribute
+				if err = pa.Decode(val); err == nil {
+					*r = append(*r, pa)
+				}
 			}
 		}
 	}
@@ -252,13 +243,19 @@ func (r *AttributeList) Decode(enc []byte) error {
 }
 
 /*
-PartialAttribute implements the partialAttribute type, per [§ 4.1.7 of RFC4511], and
-serves as slice members within instances of [PartialAttributeList], as well as the
-"modification" component of a Modify Request Change, per [§ 4.6 of RFC4511].
+	PartialAttribute ::= SEQUENCE {
+		type       AttributeDescription,
+		vals       SET OF value AttributeValue }
 
-This type also serves as the concrete type for the [Attribute] type alias.
+PartialAttribute implements the PartialAttribute type, per [§ 4.1.7 of RFC4511], and
+serves multiple purposes:
+
+  - The slice type of the [PartialAttributeList] type, per [§ 4.5.2 of RFC4511]
+  - The "modification" component of a Modify Request Change, per [§ 4.6 of RFC4511]
+  - The concrete type for the [Attribute] type alias, per [§ 4.1.7 of RFC4511]
 
 [§ 4.1.7 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.1.7
+[§ 4.5.2 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.5.2
 [§ 4.6 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.6
 */
 type PartialAttribute struct {
@@ -272,45 +269,23 @@ attempt to encode the contents of the receiver instance as a UNIVERSAL
 SEQUENCE.
 */
 func (r PartialAttribute) Encode() ([]byte, error) {
-	// Encode type
-	typeEnc, err := r.Type.Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	// Encode vals (SET OF)
-	valsPayload := make([]byte, 0)
-	for _, v := range r.Vals {
-		enc, err := v.Encode()
-		if err != nil {
-			return nil, err
+	enc := make([]byte, 0)
+	val, err := r.Type.Encode()
+	if err == nil {
+		enc = append(enc, val...)
+		for i := 0; i < len(r.Vals) && err == nil; i++ {
+			val, err = r.Vals[i].Encode()
+			if err == nil {
+				enc = append(enc, val...)
+			}
 		}
-		valsPayload = append(valsPayload, enc...)
+
+		if err == nil {
+			enc, err = wrapTLV(enc, uSeqTag())
+		}
 	}
 
-	valsEnc := asn1.WriteConstructedTLV(
-		nil,
-		asn1.ClassUniversal,
-		true,
-		uint32(asn1.TagSet),
-		valsPayload,
-	)
-
-	// Build SEQUENCE payload
-	seqPayload := make([]byte, 0)
-	seqPayload = append(seqPayload, typeEnc...)
-	seqPayload = append(seqPayload, valsEnc...)
-
-	// Wrap in SEQUENCE
-	final := asn1.WriteConstructedTLV(
-		nil,
-		asn1.ClassUniversal,
-		true,
-		uint32(asn1.TagSequence),
-		seqPayload,
-	)
-
-	return final, nil
+	return enc, err
 }
 
 /*
@@ -319,69 +294,19 @@ input encoding to the receiver instance. The encoding must not be
 truncated and must bear the UNIVERSAL SEQUENCE tag (0x30).
 */
 func (r *PartialAttribute) Decode(enc []byte) error {
-	p := 0
-
-	// If enc starts with SEQUENCE 0x30 (0x10 & constructed),
-	// we will strip it as a first measure.
-	if len(enc) > 0 && enc[0] == 0x30 {
-		payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
-
-		if err != nil {
-			return err
-		}
-		enc = payload
-		p = 0
-	}
-
-	if p+2 > len(enc) {
-		return asn1Error("PartialAttribute.Decode: short type TLV")
-	}
-	if enc[p] != asn1.TagOctetString {
-		return asn1Error("PartialAttribute.Decode: expected OCTET STRING, got ",
-			itoa(int(enc[p])))
-	}
-	typeLen := int(enc[p+1])
-	if p+2+typeLen > len(enc) {
-		return asn1Error("PartialAttribute.Decode: short type payload")
-	}
-
-	typePayload := enc[p+2 : p+2+typeLen]
-	p += 2 + typeLen
-
-	r.Type = AttributeDescription(typePayload)
-
-	var valsPayload []byte
-	var err error
-
-	if valsPayload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSet)); err == nil {
-
-		r.Vals = r.Vals[:0]
-		p2 := 0
-
-		for p2 < len(valsPayload) {
-			if p2+2 > len(valsPayload) {
-				err = asn1Error("PartialAttribute.Decode: short value TLV")
-				break
+	payload, err := unwrapTLV(enc, uSeqTag())
+	if err == nil {
+		p := 0
+		var val []byte
+		val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+		if err == nil {
+			r.Type = val
+			for p < len(payload) && err == nil {
+				val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+				if err == nil {
+					r.Vals = append(r.Vals, val)
+				}
 			}
-
-			if valsPayload[p2] != asn1.TagOctetString {
-				err = asn1Error("PartialAttribute.Decode: expected OCTET STRING, got ",
-					itoa(int(valsPayload[p2])))
-				break
-			}
-
-			vLen := int(valsPayload[p2+1])
-			if p2+2+vLen > len(valsPayload) {
-				err = asn1Error("PartialAttribute.Decode: short value payload")
-				break
-			}
-
-			vPayload := valsPayload[p2+2 : p2+2+vLen]
-			p2 += 2 + vLen
-
-			r.Vals = append(r.Vals, AttributeValue(vPayload))
 		}
 	}
 
@@ -408,79 +333,45 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as a SEQUENCE OF [LDAPString].
 */
 func (r AttributeSelection) Encode() ([]byte, error) {
-	payload := make([]byte, 0)
+	enc := make([]byte, 0)
+	var err error
 
-	for _, ls := range r {
+	for i := 0; i < len(r) && err == nil; i++ {
 		// LDAPString is encoded as OctetString, and
 		// is constrained to UTF-8.
-		if !utf8OK(ls) {
-			err := encodingError("AttributeSelection: LDAPString is not valid UTF-8")
-			return nil, err
+		if !utf8OK(r[i]) {
+			err = encodingError("AttributeSelection: LDAPString is not valid UTF-8")
+			break
 		}
 
-		enc, err := OctetString(ls).Encode()
-		if err != nil {
-			return nil, err
+		var val []byte
+		if val, err = OctetString(r[i]).Encode(); err == nil {
+			enc = append(enc, val...)
 		}
-
-		payload = append(payload, enc...)
 	}
 
-	return asn1.WrapTLV(payload, uSeqTag())
+	if err == nil {
+		enc, err = wrapTLV(enc, uSeqTag())
+	}
+
+	return enc, err
 }
 
 /*
 Decode returns an error following an attempt to decode and write the
 input encoding to the receiver instance. The encoding must not be
-truncated, and must bear the ASN.1 UNIVERSAL SEQUENCE tag (0x30).
+truncated, and must bear the UNIVERSAL SEQUENCE OF tag (0x30).
 */
 func (r *AttributeSelection) Decode(enc []byte) error {
-	p := 0
-
-	var err error
-
-	L := len(enc)
-	if L < 2 {
-		err = asn1Error("AttributeSelection.Decode: truncated encoding")
-		return err
-	}
-
-	if enc[0] != 0x30 {
-		err = asn1Error("AttributeSelection.Decode: expected 0x30 class/tag")
-		return err
-	}
-
-	var payload []byte
-	payload, err = asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
-
+	payload, err := unwrapTLV(enc, uSeqTag())
 	if err == nil {
-		L = len(payload) // update length following class/tag truncation
-		enc = payload
-		p = 0
-
-		for p < L {
-			if p+2 > L {
-				err = asn1Error("AttributeSelection.Decode: short value TLV")
-				break
+		p := 0
+		for p < len(payload) {
+			var val []byte
+			val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+			if err == nil {
+				*r = append(*r, val)
 			}
-
-			if enc[p] != asn1.TagOctetString {
-				err = asn1Error("AttributeSelection.Decode: expected OCTET STRING (4), got ",
-					itoa(int(enc[p])))
-				break
-			}
-
-			vLen := int(enc[p+1])
-			if p+2+vLen > L {
-				err = asn1Error("AttributeSelection.Decode: short value payload")
-				break
-			}
-
-			vPayload := enc[p+2 : p+2+vLen]
-			p += 2 + vLen
-
-			*r = append(*r, LDAPString(vPayload))
 		}
 	}
 
@@ -579,8 +470,11 @@ func (r AttributeSelection) Process(
 }
 
 /*
-Attribute is a direct alias of [PartialAttribute]. It has no methods of its
-own.
+	Attribute ::= PartialAttribute(WITH COMPONENTS {
+		...,
+		vals (SIZE(1..MAX))})
+
+Attribute is a direct alias of [PartialAttribute]. It has no methods of its own.
 */
 type Attribute = PartialAttribute
 
@@ -853,10 +747,10 @@ or more implementation slices of [AttributeOption].
 */
 func (r AttributeDescription) Options() AttributeOptions {
 	var options AttributeOptions
-	tsp := bytes.Split(r, []byte(`;`))
+	tsp := bytes.Split(r, tSemi)
 	for i := 0; i < len(tsp); i++ {
 		// checkFilterOIDs enforces "keychar" ABNF.
-		if err := checkFilterOIDs(tsp[i], []byte(``)); err == nil && i != 0 {
+		if err := checkFilterOIDs(tsp[i], tEmpty); err == nil && i != 0 {
 			options = append(options, AttributeTag(tsp[i]))
 		}
 	}
@@ -872,7 +766,7 @@ The return value can be split via the [AttributeTag.Split] method.
 */
 func (r AttributeDescription) Tag() AttributeTag {
 	var tag AttributeTag
-	if idx := bytes.Index(r, []byte(`;`)); idx != -1 {
+	if idx := bytes.Index(r, tSemi); idx != -1 {
 		tag = AttributeTag(r[idx:]) // preserve leading ";"
 	}
 
@@ -980,25 +874,17 @@ attempt to encode the contents of the receiver instance as a UNIVERSAL
 SEQUENCE.
 */
 func (r AttributeTypeAndValue) Encode() ([]byte, error) {
-	// Encode type
-	typeEnc, err := OctetString(r.Type).Encode()
-	if err != nil {
-		return nil, err
+	var enc []byte
+	val, err := OctetString(r.Type).Encode() // AttributeType
+	if err == nil {
+		enc = append(enc, val...)
+		if val, err = OctetString(r.Value).Encode(); err == nil { // AttributeValue
+			enc = append(enc, val...)
+			enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
+		}
 	}
 
-	var valEnc, outer []byte
-	if valEnc, err = OctetString(r.Value).Encode(); err == nil {
-
-		// Build SEQUENCE payload
-		seqPayload := make([]byte, 0)
-		seqPayload = append(seqPayload, typeEnc...)
-		seqPayload = append(seqPayload, valEnc...)
-
-		// Wrap in SEQUENCE
-		outer, err = asn1.WrapTLV(seqPayload, uSeqTag())
-	}
-
-	return outer, err
+	return enc, err
 }
 
 /*
@@ -1007,41 +893,18 @@ input encoding to the receiver instance. The encoding must not be
 truncated, and must bear the UNIVERSAL SEQUENCE tag (0x30).
 */
 func (r *AttributeTypeAndValue) Decode(enc []byte) error {
-	p := 0
-
-	// If enc starts with SEQUENCE 0x30 (0x10 & constructed),
-	// we will strip it as a first measure.
-	if len(enc) > 0 && enc[0] == 0x30 {
-		payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-			asn1.ClassUniversal, uint32(asn1.TagSequence))
-
-		if err != nil {
-			return err
-		}
-		enc = payload
-		p = 0
-	}
-
-	if p+2 > len(enc) {
-		return asn1Error("AttributeTypeAndValue.Decode: short type TLV")
-	}
-	if enc[p] != asn1.TagOctetString {
-		return asn1Error("AttributeTypeAndValue.Decode: expected OCTET STRING, got ",
-			itoa(int(enc[p])))
-	}
-	typeLen := int(enc[p+1])
-	if p+2+typeLen > len(enc) {
-		return asn1Error("AttributeTypeAndValue.Decode: short type payload")
-	}
-
-	typePayload := enc[p+2 : p+2+typeLen]
-	p += 2 + typeLen
-
-	r.Type = typePayload
-
-	_, valsPayload, err := asn1.ReadConstructedTLV(enc, &p)
+	payload, err := unwrapTLV(enc, uSeqTag()) // SEQUENCE
 	if err == nil {
-		r.Value = valsPayload
+		var val []byte
+		p := 0
+		val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+		if err == nil {
+			r.Type = val // AttributeType
+			val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+			if err == nil {
+				r.Value = val // AttributeValue
+			}
+		}
 	}
 
 	return err
@@ -1083,7 +946,7 @@ String returns the string representation of the receiver instance.
 func (r AttributeTypeAndValue) String() string {
 	typ := encodeATV(lc(r.Type), false)
 	val := encodeATV(r.Value, true)
-	typ = append(typ, []byte(`=`)...)
+	typ = append(typ, tEquals...)
 	typ = append(typ, val...)
 	return string(typ)
 }
@@ -1110,16 +973,14 @@ func (r AttributeTypeAndValue) EqualFold(o AttributeTypeAndValue) bool {
 }
 
 func isAttribute(in []byte) (is bool) {
-	if len(in) == 0 {
-		return false
-	}
-
-	switch {
-	case isAlpha(rune(in[0])):
-		is, _ = isDescr(string(in))
-	case isDigit(rune(in[0])):
-		_, err := marshalLDAPOID(in)
-		is = err == nil
+	if len(in) > 0 {
+		switch {
+		case isAlpha(rune(in[0])):
+			is, _ = isDescr(string(in))
+		case isDigit(rune(in[0])):
+			_, err := marshalLDAPOID(in)
+			is = err == nil
+		}
 	}
 
 	return
@@ -1133,12 +994,12 @@ func (r AttributeTypeAndValue) decodeEncodedString(str string) (string, error) {
 	}
 
 	p := 0
-	tag, val, err := asn1.ReadConstructedTLV(b, &p)
+	tag, val, err := readCTLV(b, &p)
 	if err == nil {
 		if p != len(b) {
 			return "", asn1Error("DistinguishedName: trailing bytes after value")
 		}
-		err = tag.Expect(asn1.ClassUniversal, false, uint32(asn1.TagOctetString))
+		err = tag.Expect(classU, false, uint32(tOct))
 	}
 
 	return string(val), err

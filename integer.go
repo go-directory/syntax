@@ -7,9 +7,6 @@ integer.go contains methods and types related to the ASN.1 INTEGER type.
 import (
 	"math"
 	"math/big"
-	"strconv"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 /*
@@ -90,7 +87,7 @@ func (r Integer) String() string {
 	if r.big {
 		s = r.bigInt.String()
 	} else {
-		s = strconv.FormatInt(r.native, 10)
+		s = fint(r.native, 10)
 	}
 
 	return s
@@ -148,9 +145,9 @@ func (r Integer) Encode() ([]byte, error) {
 
 	var enc []byte
 	if r.big {
-		enc = asn1.EncodeInteger[*big.Int](r.bigInt)
+		enc = encInt[*big.Int](r.bigInt)
 	} else {
-		enc = asn1.EncodeInteger[int64](r.native)
+		enc = encInt[int64](r.native)
 	}
 
 	return enc, nil
@@ -163,15 +160,15 @@ not be truncated, and must bear the INTEGER tag (0x02).
 */
 func (r *Integer) Decode(enc []byte) error {
 	L := len(enc)
-	if L < 2 || enc[0] != asn1.TagInteger {
+	if L < 2 || enc[0] != tInt {
 		return errIntCodec
 	}
 
 	var err error
 	if L > 10 {
-		r.bigInt, err = asn1.DecodeInteger[*big.Int](enc)
+		r.bigInt, err = decInt[*big.Int](enc)
 	} else {
-		r.native, err = asn1.DecodeInteger[int64](enc)
+		r.native, err = decInt[int64](enc)
 	}
 
 	return err

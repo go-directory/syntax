@@ -7,16 +7,14 @@ per RFC 4523.
 
 import (
 	"bytes"
-	goX509 "crypto/x509"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"errors"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
-func parseX509(b []byte) (asn1.TLV, int, error) {
+func parseX509(b []byte) (TLV, int, error) {
 	if len(b) < 2 {
-		return asn1.TLV{}, 0, errShortDER
+		return TLV{}, 0, errShortDER
 	}
 
 	tagByte := b[0]
@@ -26,7 +24,7 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 	tagNum := int(tagByte & 0x1F)
 
 	if tagNum == 0x1F {
-		return asn1.TLV{}, 0, errHighTag
+		return TLV{}, 0, errHighTag
 	}
 
 	l := b[1]
@@ -39,10 +37,10 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 	} else {
 		n := int(l & 0x7F)
 		if n == 0 || n > 4 {
-			return asn1.TLV{}, 0, errTLVLen
+			return TLV{}, 0, errTLVLen
 		}
 		if len(b) < 2+n {
-			return asn1.TLV{}, 0, errShortDER
+			return TLV{}, 0, errShortDER
 		}
 		length = 0
 		for i := 0; i < n; i++ {
@@ -52,11 +50,11 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 	}
 
 	if len(b) < offset+length {
-		return asn1.TLV{}, 0, errShortDER
+		return TLV{}, 0, errShortDER
 	}
 
 	val := b[offset : offset+length]
-	tlv := asn1.TLV{
+	tlv := TLV{
 		Tag:         byte(tagNum),
 		Class:       byte(class),
 		Constructed: constructed,
@@ -65,12 +63,12 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 	}
 
 	if constructed {
-		children := []asn1.TLV{}
+		children := []TLV{}
 		consumed := 0
 		for consumed < length {
 			child, n, err := parseX509(val[consumed:])
 			if err != nil {
-				return asn1.TLV{}, 0, err
+				return TLV{}, 0, err
 			}
 			children = append(children, child)
 			consumed += n
@@ -83,7 +81,7 @@ func parseX509(b []byte) (asn1.TLV, int, error) {
 
 func extractCRLIssuerDER(crlDER []byte) ([]byte, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 	)
 
@@ -127,7 +125,7 @@ func NewAlgorithmIdentifier(b []byte) (AlgorithmIdentifier, error) {
 	var (
 		alg AlgorithmIdentifier
 		err error
-		tlv asn1.TLV
+		tlv TLV
 	)
 
 	if tlv, _, err = parseX509(b); err != nil {
@@ -172,7 +170,7 @@ func algorithmIdentifierAssertion(x any) (result bool, err error) {
 
 func NewCertificateExactAssertion(b []byte) ([]byte, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 	)
 
@@ -204,7 +202,7 @@ type CertificateAssertion struct {
 
 func NewCertificateAssertion(b []byte) (CertificateAssertion, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 		ca  CertificateAssertion
 	)
@@ -228,9 +226,9 @@ func NewCertificateAssertion(b []byte) (CertificateAssertion, error) {
 }
 
 func stripInnerOctet(v []byte) []byte {
-	if len(v) >= 2 && v[0] == asn1.TagOctetString {
+	if len(v) >= 2 && v[0] == tOct {
 		p := 0
-		_, payload, err := asn1.ReadConstructedTLV(v, &p)
+		_, payload, err := readCTLV(v, &p)
 		if err == nil {
 			return payload
 		}
@@ -255,7 +253,7 @@ type CRLAssertion struct {
 
 func NewCRLAssertion(b []byte) (CRLAssertion, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 		ca  CRLAssertion
 	)
@@ -284,8 +282,8 @@ func cRLAssertion(x any) (result bool, err error) {
 	return
 }
 
-func NewCertificate(b []byte) (*goX509.Certificate, error) {
-	return goX509.ParseCertificate(b)
+func NewCertificate(b []byte) (*x509.Certificate, error) {
+	return x509.ParseCertificate(b)
 }
 
 func certificate(x any) (result bool, err error) {
@@ -300,7 +298,7 @@ func certificate(x any) (result bool, err error) {
 }
 
 func NewCRL(b []byte) (*pkix.CertificateList, error) {
-	return goX509.ParseCRL(b)
+	return x509.ParseCRL(b)
 }
 
 func certificateList(x any) (result bool, err error) {
@@ -321,7 +319,7 @@ type CertificatePair struct {
 
 func NewCertificatePair(b []byte) (CertificatePair, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 		cp  CertificatePair
 	)
@@ -335,12 +333,12 @@ func NewCertificatePair(b []byte) (CertificatePair, error) {
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && c.Constructed {
+		if c.Class == classC && c.Tag == 0 && c.Constructed {
 			// [0] -> SEQUENCE -> OCTET STRING
 			inner := c.Children[0].Children[0] // Tag=0x4, Length=1, Value={0xaa}
 			cp.ForwardDER = append([]byte{inner.Tag, byte(inner.Length)}, inner.Value...)
 		}
-		if c.Class == asn1.ClassContextSpecific && c.Tag == 1 && c.Constructed {
+		if c.Class == classC && c.Tag == 1 && c.Constructed {
 			inner := c.Children[0].Children[0] // Tag=0x4, Length=1, Value={0xbb}
 			cp.ReverseDER = append([]byte{inner.Tag, byte(inner.Length)}, inner.Value...)
 		}
@@ -364,7 +362,7 @@ type CertificatePairAssertion CertificatePair
 
 func NewCertificatePairAssertion(b []byte) (CertificatePairAssertion, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 		cpa CertificatePairAssertion
 	)
@@ -379,10 +377,10 @@ func NewCertificatePairAssertion(b []byte) (CertificatePairAssertion, error) {
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && !c.Constructed {
+		if c.Class == classC && c.Tag == 0 && !c.Constructed {
 			cpa.ForwardDER = c.Value
 		}
-		if c.Class == asn1.ClassContextSpecific && c.Tag == 1 && !c.Constructed {
+		if c.Class == classC && c.Tag == 1 && !c.Constructed {
 			cpa.ReverseDER = c.Value
 		}
 	}
@@ -403,7 +401,7 @@ func certificatePairAssertion(x any) (result bool, err error) {
 
 func NewCertificatePairExactAssertion(b []byte) ([]byte, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 	)
 
@@ -433,7 +431,7 @@ type CertificateListAssertion struct {
 
 func NewCertificateListAssertion(b []byte) (CertificateListAssertion, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 		a   CertificateListAssertion
 	)
@@ -447,7 +445,7 @@ func NewCertificateListAssertion(b []byte) (CertificateListAssertion, error) {
 	}
 
 	for _, c := range tlv.Children {
-		if c.Class == asn1.ClassContextSpecific && c.Tag == 0 && !c.Constructed {
+		if c.Class == classC && c.Tag == 0 && !c.Constructed {
 			a.IssuerDER = c.Value
 		}
 	}
@@ -468,7 +466,7 @@ func certificateListAssertion(x any) (result bool, err error) {
 
 func NewCertificateListExactAssertion(b []byte) ([]byte, error) {
 	var (
-		tlv asn1.TLV
+		tlv TLV
 		err error
 	)
 
@@ -532,7 +530,7 @@ func MatchAlgorithmIdentifier(
 	return
 }
 
-func MatchCertificateFields(cert *goX509.Certificate, a CertificateAssertion) bool {
+func MatchCertificateFields(cert *x509.Certificate, a CertificateAssertion) bool {
 	if a.IssuerDER != nil && !bytes.Equal(cert.RawIssuer, a.IssuerDER) {
 		return false
 	}

@@ -4,10 +4,6 @@ package syntax
 ostr.go contains ASN.1 OCTET STRING types and methods.
 */
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 OctetString implements [§ 3.3.25 of RFC 4517]:
 
@@ -172,7 +168,7 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 OCTET STRING value.
 */
 func (r OctetString) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagOctetString, r)
+	return encodeP(tOct, r)
 }
 
 /*
@@ -181,11 +177,11 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the OCTET STRING tag (0x04).
 */
 func (r *OctetString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != asn1.TagOctetString {
+	if len(enc) < 2 || enc[0] != tOct {
 		return errOctetDecode
 	}
 
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errOctetDecode
 	}

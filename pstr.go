@@ -1,9 +1,5 @@
 package syntax
 
-import (
-	"github.com/go-directory/encoding/asn1"
-)
-
 /*
 PrintableString implements [§ 3.3.29 of RFC 4517]:
 
@@ -114,7 +110,7 @@ attempt to encode the receiver instance as an ASN.1 PrintableString.
 value.
 */
 func (r PrintableString) Encode() ([]byte, error) {
-	return asn1.EncodePrimitive(asn1.TagPrintableString, r)
+	return encodeP(tPS, r)
 }
 
 /*
@@ -123,10 +119,10 @@ the input enc value to the receiver instance.  The encoding must
 not be truncated, and must bear the PrintableString tag (0x13).
 */
 func (r *PrintableString) Decode(enc []byte) error {
-	if len(enc) < 2 || enc[0] != asn1.TagPrintableString {
+	if len(enc) < 2 || enc[0] != tPS {
 		return errPrintableDecode
 	}
-	l, n := asn1.ReadPrimitiveLength(enc[1:])
+	l, n := readLen(enc[1:])
 	if n == 0 || len(enc) < 1+n+l {
 		return errPrintableDecode
 	}

@@ -6,19 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-
-	"github.com/go-directory/encoding/asn1"
 )
-
-func aTag(class byte, constr bool, tag uint32) asn1.Tag {
-	return asn1.Tag{
-		Class:       class,
-		Constructed: constr,
-		Tag:         uint32(tag),
-	}
-}
-
-func uSeqTag() asn1.Tag { return aTag(0, true, 16) }
 
 type textLike interface{ ~string | ~[]byte }
 

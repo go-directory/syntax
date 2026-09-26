@@ -51,26 +51,58 @@ func NewEnhancedGuide(x any) (EnhancedGuide, error) {
 
 /*
 Encode returns an instance of []byte alongside an error following
-an attempt to encode the receiver instance as an ASN.1 SEQUENCE.
+an attempt to encode the receiver instance as a UNIVERSAL SEQUENCE.
 */
 func (r EnhancedGuide) Encode() ([]byte, error) {
-	oc, err := r.ObjectClass.Encode()
-	var outer []byte
+	enc := make([]byte, 0)
+	val, err := r.ObjectClass.Encode() // OBJECT IDENTIFIER
 	if err == nil {
-		var payload []byte
-		payload = append(payload, oc...)
-		var crit []byte
-		if crit, err = r.Criteria.Encode(); err == nil {
-			payload = append(payload, crit...)
-			var subset []byte
-			if subset, err = r.Subset.Encode(); err == nil {
-				payload = append(payload, subset...)
-				outer, err = asn1.WrapTLV(payload, uSeqTag())
+		val, _ = wrapTLV(val, aTag(classC, false, uint32(0))) // [0]
+		enc = append(enc, val...)
+		if val, err = r.Criteria.Encode(); err == nil { // CHOICE:CRITERIA
+			val, _ = wrapTLV(val, aTag(classC, true, uint32(1))) // [1]
+			enc = append(enc, val...)
+			if val, err = r.Subset.Encode(); err == nil { // INTEGER
+				val, _ = wrapTLV(val, aTag(classC, false, uint32(2))) // [2]
+				enc = append(enc, val...)
+				enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
 			}
 		}
 	}
 
-	return outer, err
+	return enc, err
+}
+
+/*
+Decode returns an error following an attempt to decode and write the input
+encoding to the receiver instance. The encoding must not be truncated and
+must bear the UNIVERSAL SEQUENCE tag (0x30).
+*/
+func (r *EnhancedGuide) Decode(enc []byte) error {
+	payload, err := unwrapTLV(enc, uSeqTag())
+	if err == nil {
+		p := 0
+		var val []byte
+		val, err = readEPTLV(payload, &p, classC, 0)
+		if err == nil {
+			if err = r.ObjectClass.Decode(val); err == nil {
+				val, err = readECTLV(payload, &p, classC, 1, true)
+				if err == nil {
+					tag, _ := readTag(val)
+					r.Criteria, err = decodeCriteriaByTag(tag.Tag, val)
+					if err == nil {
+						val, err = readEPTLV(payload, &p, classC, 2)
+						if err == nil {
+							err = r.Subset.Decode(val)
+							r.Subset.ok = err == nil // TODO fix this
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return err
 }
 
 func enhancedGuide(x any) (result bool, err error) {
@@ -190,6 +222,51 @@ func guide(x any) (result bool, err error) {
 	_, err = marshalGuide(x)
 	result = err == nil
 	return
+}
+
+/*
+Encode returns an instance of []byte alongside an error following
+an attempt to encode the receiver instance as a UNIVERSAL SEQUENCE.
+*/
+func (r Guide) Encode() ([]byte, error) {
+	enc := make([]byte, 0)
+	val, err := r.ObjectClass.Encode() // OBJECT IDENTIFIER
+	if err == nil {
+		val, _ = wrapTLV(val, aTag(classC, false, uint32(0))) // [0]
+		enc = append(enc, val...)
+		if val, err = r.Criteria.Encode(); err == nil { // CHOICE:CRITERIA
+			val, _ = wrapTLV(val, aTag(classC, true, uint32(1))) // [1]
+			enc = append(enc, val...)
+			enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
+		}
+	}
+
+	return enc, err
+}
+
+/*
+Decode returns an error following an attempt to decode and write the input
+encoding to the receiver instance. The encoding must not be truncated and
+must bear the UNIVERSAL SEQUENCE tag (0x30).
+*/
+func (r *Guide) Decode(enc []byte) error {
+	payload, err := unwrapTLV(enc, uSeqTag())
+	if err == nil {
+		p := 0
+		var val []byte
+		val, err = readEPTLV(payload, &p, classC, 0)
+		if err == nil {
+			if err = r.ObjectClass.Decode(val); err == nil {
+				val, err = readECTLV(payload, &p, classC, 1, true)
+				if err == nil {
+					tag, _ := readTag(val)
+					r.Criteria, err = decodeCriteriaByTag(tag.Tag, val)
+				}
+			}
+		}
+	}
+
+	return err
 }
 
 func marshalGuide(x any) (g Guide, err error) {
@@ -341,7 +418,7 @@ func (r CriteriaItemApproximateMatch) Encode() ([]byte, error) {
 func criteriaItemEncode(raw []byte, tag int) (outer []byte, err error) {
 	var payload []byte
 	if payload, err = OctetString(raw).Encode(); err == nil {
-		outer, err = asn1.WrapTLV(payload,
+		outer, err = wrapTLV(payload,
 			aTag(asn1.ClassContextSpecific,
 				false, uint32(tag)))
 	}
@@ -685,15 +762,66 @@ func (_ invalidCriteria) Encode() ([]byte, error) {
 }
 
 func (r CriteriaAnd) Encode() ([]byte, error) {
-	return nil, nil // placeholder
+	return encodeCriteriaSet(uint32(r.Tag()), r)
 }
 
 func (r CriteriaOr) Encode() ([]byte, error) {
-	return nil, nil // placeholder
+	return encodeCriteriaSet(uint32(r.Tag()), r)
+}
+
+func (r *CriteriaAnd) Decode(enc []byte) error {
+	var f []Criteria
+	var err error
+	f, err = decodeCriteriaSet(uint32(r.Tag()), enc)
+	if err == nil {
+		*r = CriteriaAnd(f)
+	}
+	return err
+}
+
+func (r *CriteriaOr) Decode(enc []byte) error {
+	var f []Criteria
+	var err error
+	f, err = decodeCriteriaSet(uint32(r.Tag()), enc)
+	if err == nil {
+		*r = CriteriaOr(f)
+	}
+
+	return err
 }
 
 func (r CriteriaNot) Encode() ([]byte, error) {
-	return nil, nil // placeholder
+	enc, err := r.Criteria.Encode()
+	var out []byte
+	if err == nil {
+		out, err = wrapTLV(enc,
+			aTag(classC,
+				true, uint32(r.Tag())))
+	}
+
+	return out, err
+}
+
+func (r *CriteriaNot) Decode(enc []byte) error {
+	p := 0
+
+	payload, err := readECTLV(enc, &p, classC, uint32(r.Tag()))
+
+	if err == nil {
+
+		p2 := 0
+		start := p2
+
+		var childTag Tag
+		if childTag, _, err = readCTLV(payload, &p2); err == nil {
+			var f Criteria
+			if f, err = decodeCriteriaByTag(childTag.Tag, payload[start:p2]); err == nil {
+				r.Criteria = f
+			}
+		}
+	}
+
+	return err
 }
 
 /*
@@ -847,6 +975,99 @@ func (r CriteriaNot) Valid() (err error) {
 	} else {
 		err = r.Criteria.Valid()
 	}
+	return
+}
+
+func encodeCriteriaSet(tag uint32, fs []Criteria) ([]byte, error) {
+	var payload []byte
+	var err error
+
+	for i := 0; i < len(fs) && err == nil; i++ {
+		var enc []byte
+		enc, err = fs[i].Encode()
+		if err == nil {
+			payload = append(payload, enc...)
+		}
+	}
+
+	var out []byte
+	if err == nil {
+		out, err = wrapTLV(payload,
+			aTag(classU, true, uint32(tSet)),
+			aTag(classC, true, tag))
+	}
+
+	return out, err
+}
+
+func decodeCriteriaSet(tag uint32, enc []byte) ([]Criteria, error) {
+
+	payload, err := unwrapTLV(enc,
+		aTag(classC, true, tag),
+		aTag(classU, true, uint32(tSet)))
+
+	var out []Criteria
+	if err == nil {
+		p := 0
+		for p < len(payload) && err == nil {
+			start := p
+
+			var childTag Tag
+			if childTag, _, err = readCTLV(payload, &p); err == nil {
+				var f Criteria
+				f, err = decodeCriteriaByTag(childTag.Tag, payload[start:p])
+				if err == nil {
+					out = append(out, f)
+				}
+			}
+		}
+	}
+
+	return out, err
+}
+
+func decodeCriteriaByTag(tag uint32, payload []byte) (f Criteria, err error) {
+	switch tag {
+	case 0:
+		subtag, _ := readTag(payload)
+
+		var val []byte
+		val, err = unwrapTLV(payload, aTag(classC, false, subtag.Tag))
+		if err == nil {
+			var x OctetString
+			if err = x.Decode(val); err == nil {
+				switch subtag.Tag {
+				case 0:
+					f = CriteriaItemEquality(x)
+				case 1:
+					f = CriteriaItemSubstrings(x)
+				case 2:
+					f = CriteriaItemGreaterOrEqual(x)
+				case 3:
+					f = CriteriaItemLessOrEqual(x)
+				case 4:
+					f = CriteriaItemApproximateMatch(x)
+				default:
+					err = asn1Error("unexpected CriteriaItem tag ", itoa(int(subtag.Tag)))
+				}
+			}
+		}
+	case 1:
+		var x CriteriaAnd
+		err = x.Decode(payload)
+		f = x
+	case 2:
+		var x CriteriaOr
+		err = x.Decode(payload)
+		f = x
+	case 3:
+		var x CriteriaNot
+		err = x.Decode(payload)
+		f = x
+	default:
+		err = asn1Error("unexpected Criteria tag ", itoa(int(tag)))
+	}
+
 	return
 }
 

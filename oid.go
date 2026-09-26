@@ -527,7 +527,7 @@ func (r *ObjectIdentifier) Decode(enc []byte) error {
 	}
 
 	_, lb := readLen(enc[1:]) // get size of length bytes
-	enc = enc[lb+1:] // chop after tag/len bytes
+	enc = enc[lb+1:]          // chop after tag/len bytes
 
 	var (
 		dec  any

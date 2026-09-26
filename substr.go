@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/go-directory/encoding/asn1"
 )
 
 const (
@@ -99,27 +97,16 @@ func (r Substrings) Encode() ([]byte, error) {
 		}
 	}
 
-	if err != nil {
-		return nil, err
+	var out []byte
+	if err == nil {
+		out, err = wrapTLV(payload, uSeqTag())
 	}
 
-	out := asn1.WriteConstructedTLV(
-		nil,
-		asn1.ClassUniversal,
-		true,
-		uint32(asn1.TagSequence),
-		payload,
-	)
-
-	return out, nil
+	return out, err
 }
 
 func (r *Substrings) Decode(enc []byte) error {
-	p := 0
-
-	payload, err := asn1.ReadExpectedConstructedTLV(enc, &p,
-		asn1.ClassUniversal, uint32(asn1.TagSequence))
-
+	payload, err := unwrapTLV(enc, uSeqTag())
 	if err != nil {
 		return err
 	}
@@ -129,15 +116,15 @@ func (r *Substrings) Decode(enc []byte) error {
 	var Final SubstringFinal
 	var Any SubstringAny
 	for p2 < len(payload) && err == nil {
-		var childTag asn1.Tag
+		var childTag Tag
 		var childPayload []byte
 
-		childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2)
+		childTag, childPayload, err = readCTLV(payload, &p2)
 		if err != nil {
 			break
 		}
 
-		if first := childPayload[0]; first != asn1.TagOctetString {
+		if first := childPayload[0]; first != tOct {
 			err = asn1Error("Substring: unexpected tag ",
 				itoa(int(first)))
 			break
@@ -207,38 +194,27 @@ func (r SubstringAny) Encode() ([]byte, error) {
 
 	var out []byte
 	if err == nil {
-		out = asn1.WriteConstructedTLV(
-			nil,
-			asn1.ClassContextSpecific,
-			true,
-			uint32(r.Tag()),
-			payload,
-		)
+		out, err = wrapTLV(payload, aTag(classC, true, uint32(r.Tag())))
 	}
 
 	return out, err
 }
 
 func (r *SubstringAny) Decode(enc []byte) error {
-	p := 0
 
-	tag, payload, err := asn1.ReadConstructedTLV(enc, &p)
+	payload, err := unwrapTLV(enc, aTag(classC, true, uint32(r.Tag())))
 	if err != nil {
-		return err
-	}
-
-	if err = tag.Expect(asn1.ClassContextSpecific, true, uint32(r.Tag())); err != nil {
 		return err
 	}
 
 	p2 := 0
 	for p2 < len(payload) && err == nil {
-		var childTag asn1.Tag
+		var childTag Tag
 		var childPayload []byte
-		if childTag, childPayload, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
-			if childTag.Tag != uint32(asn1.TagOctetString) {
+		if childTag, childPayload, err = readCTLV(payload, &p2); err == nil {
+			if childTag.Tag != uint32(tOct) {
 				err = asn1Error("Substring.Any Assertion Value: want %d, got %d",
-					itoa(int(asn1.TagOctetString)),
+					itoa(int(tOct)),
 					itoa(int(childTag.Tag)))
 				break
 			}
@@ -266,13 +242,9 @@ func encodeSubstringInitOrFinal(x Substring) (out []byte, err error) {
 		enc, err = OctetString(tv).Encode()
 	}
 
-	out = asn1.WriteConstructedTLV(
-		nil,
-		asn1.ClassContextSpecific,
-		false,
-		uint32(x.Tag()),
-		enc)
-
+	if err == nil {
+		out, err = wrapTLV(enc, aTag(classC, false, uint32(x.Tag())))
+	}
 	return out, err
 }
 
@@ -295,13 +267,13 @@ func (r *SubstringFinal) Decode(enc []byte) error {
 func decodeSubstringInitOrFinal(enc []byte) (sub Substring, err error) {
 	p := 0
 
-	var tag asn1.Tag
+	var tag Tag
 	var payload []byte
 
-	if tag, payload, err = asn1.ReadConstructedTLV(enc, &p); err == nil {
+	if tag, payload, err = readCTLV(enc, &p); err == nil {
 		p2 := 0
 		var val []byte
-		if _, val, err = asn1.ReadConstructedTLV(payload, &p2); err == nil {
+		if _, val, err = readCTLV(payload, &p2); err == nil {
 			switch uint32(tag.Tag) {
 			case tagSubstringInitial:
 				if err == nil {

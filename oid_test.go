@@ -69,7 +69,7 @@ func ExampleObjectIdentifier_roundTripBER() {
 
 func ExampleObjectIdentifier_Decode_bogus() {
 	// pre-encoded OID bytes for (illegal) 3.3.6.1.4.1
-	enc := []byte{0x7B, 0x6, 0x1, 0x4, 0x1}
+	enc := []byte{0x06, 0x05, 0x7B, 0x6, 0x1, 0x4, 0x1}
 
 	var dest ObjectIdentifier
 	fmt.Println(dest.Decode(enc))
