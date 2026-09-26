@@ -508,6 +508,9 @@ func (r ObjectIdentifier) Encode() ([]byte, error) {
 		}
 	}
 
+	tl := writeLen([]byte{0x06}, len(wire))
+	wire = append(tl, wire...)
+
 	return wire, nil
 }
 
@@ -517,9 +520,14 @@ into the receiver instance. Any data present in the receiver instance will
 be destroyed.
 */
 func (r *ObjectIdentifier) Decode(enc []byte) error {
-	if len(enc) < 1 {
+	if len(enc) < 3 {
 		return errorOIDBadEnc
+	} else if enc[0] != tOID {
+		return encodingError("OBJECT IDENTIFIER: unexpected tag byte: ", itoa(int(enc[0])))
 	}
+
+	_, lb := readLen(enc[1:]) // get size of length bytes
+	enc = enc[lb+1:] // chop after tag/len bytes
 
 	var (
 		dec  any
