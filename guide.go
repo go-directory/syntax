@@ -335,13 +335,6 @@ This interface is implemented through instances of the following types:
 
 Note that the [Criteria] interface is a superset of this interface.
 
-As a whole, instances of this type represent the "type" ASN.1 CHOICE
-component of a [Criteria] implementation. Therefore, when encoded by
-itself, an instance of this type shall only bear the CONTEXT-SPECIFIC
-tags shown in the above definition. But when encoded in a bonafide
-[Criteria] context, the encoding is wrapped in an additional UNIVERSAL [0]
-context.
-
 [§ 6.5.2 of ITU-T rec. X.520]: https://www.itu.int/rec/T-REC-X.520
 */
 type CriteriaItem interface {
