@@ -10,6 +10,16 @@ import (
 )
 
 /*
+        maxInt INTEGER ::= 2147483647
+
+MaxInt implements the 'maxInt' definition, per [§ 4.1.1 of RFC4511], which spans
+the unsigned half of int32.
+
+[§ 4.1.1 of RFC4511]: https://datatracker.ietf.org/doc/html/rfc4511#section-4.1.1
+*/
+const MaxInt = 2147483647
+
+/*
 Integer implements the unbounded ASN.1 INTEGER type (tag 2).
 
 Note that *[big.Int] is used internally ONLY if the number overflows uint64.
