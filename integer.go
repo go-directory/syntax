@@ -10,7 +10,7 @@ import (
 )
 
 /*
-        maxInt INTEGER ::= 2147483647
+	maxInt INTEGER ::= 2147483647
 
 MaxInt implements the 'maxInt' definition, per [§ 4.1.1 of RFC4511], which spans
 the unsigned half of int32.

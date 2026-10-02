@@ -270,18 +270,23 @@ SEQUENCE.
 */
 func (r PartialAttribute) Encode() ([]byte, error) {
 	enc := make([]byte, 0)
-	val, err := r.Type.Encode()
+	val, err := r.Type.Encode() // AttributeDescription (OCTET STRING)
 	if err == nil {
 		enc = append(enc, val...)
+		var vals []byte
 		for i := 0; i < len(r.Vals) && err == nil; i++ {
-			val, err = r.Vals[i].Encode()
+			val, err = r.Vals[i].Encode() // AttributeValue (OCTET STRING)
 			if err == nil {
-				enc = append(enc, val...)
+				vals = append(vals, val...)
 			}
 		}
 
 		if err == nil {
-			enc, err = wrapTLV(enc, uSeqTag())
+			vals, err = wrapTLV(vals, aTag(classU, true, uint32(tSet))) // SET OF value AttributeValue
+			if err == nil {
+				enc = append(enc, vals...)
+				enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
+			}
 		}
 	}
 
@@ -294,17 +299,21 @@ input encoding to the receiver instance. The encoding must not be
 truncated and must bear the UNIVERSAL SEQUENCE tag (0x30).
 */
 func (r *PartialAttribute) Decode(enc []byte) error {
-	payload, err := unwrapTLV(enc, uSeqTag())
+	payload, err := unwrapTLV(enc, uSeqTag()) // SEQUENCE
 	if err == nil {
 		p := 0
 		var val []byte
-		val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+		val, err = readEPTLV(payload, &p, classU, uint32(tOct)) // AttributeDescription (OCTET STRING)
 		if err == nil {
 			r.Type = val
-			for p < len(payload) && err == nil {
-				val, err = readEPTLV(payload, &p, classU, uint32(tOct))
+			var set []byte
+			set, err = readECTLV(payload, &p, classU, uint32(tSet)) // SET OF value AttributeValue
+			p = 0
+			for p < len(set) && err == nil {
+				var av OctetString
+				av, err = readEPTLV(set, &p, classU, uint32(tOct)) // AttributeValue (OCTET STRING)
 				if err == nil {
-					r.Vals = append(r.Vals, val)
+					r.Vals = append(r.Vals, AttributeValue(av))
 				}
 			}
 		}

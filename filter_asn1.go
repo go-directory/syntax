@@ -1,6 +1,26 @@
 package syntax
 
 /*
+FilterDefaultEncoding defines a pre-computed BER encoding of the
+official LDAP Search Filter default, "objectClass=*". When properly
+decoded, it will manifest as an instance of [FilterPresent].
+
+This variable is defined specifically for performance reasons, and
+is intended for use during the encoding of a search request which
+lacks a [Filter] value.
+
+See [§ 2 of RFC4515] for the relevant ASN.1 definition and encoding
+details.
+
+[§ 2 of RFC4515]: https://datatracker.ietf.org/doc/html/rfc4515#section-2
+*/
+var FilterDefaultEncoding = []byte{
+	0x87, 0x0b, // CONTEXT-SPECIFIC [7], LEN: 11
+	0x6f, 0x62, 0x6a, 0x65, 0x63, 0x74, // 'o' 'b' 'j' 'e' 'c' 't'
+	0x43, 0x6c, 0x61, 0x73, 0x73, // 'C' 'l' 'a' 's' 's'
+}
+
+/*
 FilterDecode returns an instance of [Filter] alongside an error
 following an attempt to decode and write the input enc bytes.
 
@@ -96,7 +116,7 @@ func encodeFilterSet(tag uint32, fs []Filter) ([]byte, error) {
 	var out []byte
 	if err == nil {
 		out, err = wrapTLV(payload,
-			aTag(classU, true, uint32(tSet)),
+			//aTag(classU, true, uint32(tSet)),
 			aTag(classC, true, tag))
 	}
 
@@ -106,8 +126,8 @@ func encodeFilterSet(tag uint32, fs []Filter) ([]byte, error) {
 func decodeFilterSet(tag uint32, enc []byte) ([]Filter, error) {
 
 	payload, err := unwrapTLV(enc,
-		aTag(classC, true, tag),
-		aTag(classU, true, uint32(tSet)))
+		aTag(classC, true, tag))
+	//aTag(classU, true, uint32(tSet)))
 
 	var out []Filter
 	if err == nil {
@@ -188,7 +208,7 @@ func (r FilterSubstrings) Encode() ([]byte, error) {
 		var sub []byte
 		if sub, err = r.Substrings.Encode(); err == nil {
 			payload = append(payload, sub...)
-			outer, err = wrapTLV(payload, uSeqTag(),
+			outer, err = wrapTLV(payload,
 				aTag(classC, true, uint32(r.Tag())))
 		}
 	}
@@ -198,8 +218,7 @@ func (r FilterSubstrings) Encode() ([]byte, error) {
 
 func (r *FilterSubstrings) Decode(enc []byte) error {
 	payload, err := unwrapTLV(enc,
-		aTag(classC, true, uint32(r.Tag())),
-		uSeqTag())
+		aTag(classC, true, uint32(r.Tag())))
 
 	if err == nil {
 		p := 0
@@ -213,11 +232,7 @@ func (r *FilterSubstrings) Decode(enc []byte) error {
 					// 0x04 OCTET STRING
 					r.Type = AttributeDescription(dPayload)
 				case 16:
-					// 0x10 SEQUENCE
-					var wrapped []byte
-					wrapped, err = wrapTLV(dPayload, uSeqTag())
-
-					subs = append(subs, wrapped...)
+					subs = append(subs, dPayload...)
 				}
 			}
 		}
@@ -228,73 +243,57 @@ func (r *FilterSubstrings) Decode(enc []byte) error {
 }
 
 func (r FilterPresent) Encode() ([]byte, error) {
-	var payload, outer []byte
-
-	// attributeDesc
-	ad := AttributeDescription(r.Desc)
-
-	encDesc, err := ad.Encode()
-	if err == nil {
-		payload = append(payload, encDesc...)
-
-		outer, err = wrapTLV(payload,
-			uSeqTag(),
-			aTag(classU, true, uint32(r.Tag())))
-	}
-
-	return outer, err
+	// TODO: isAttr check for r.Desc.
+	return wrapTLV(r.Desc,
+		aTag(classC, false, uint32(r.Tag())))
 }
 
 func (r *FilterPresent) Decode(enc []byte) error {
 
 	// Outer SEQUENCE
 	payload, err := unwrapTLV(enc,
-		aTag(classU, true, uint32(r.Tag())),
-		uSeqTag(),
-		aTag(classU, false, uint32(tOct)))
+		aTag(classC, false, uint32(r.Tag())))
 
 	if err == nil {
-		r.Desc = AttributeDescription(payload)
+		r.Desc = payload
 	}
 
 	return err
 }
 
 func (r FilterGreaterOrEqual) Encode() ([]byte, error) {
-	enc, err := AttributeValueAssertion(r).Encode()
-	var out []byte
+	var enc []byte
+	ava, err := AttributeValueAssertion(r).Encode()
 	if err == nil {
 		// Strip the outer SEQUENCE (UNIVERSAL, constructed, tag = TagSequence)
-		p := 0
-		var innerPayload []byte
-		innerPayload, err = readECTLV(enc, &p, classU, uint32(tSeq))
+		enc, err = unwrapTLV(ava,
+			aTag(classU, true, uint32(tSeq)))
 
 		if err == nil {
 			// wrap as Filter greaterOrEqual: [5] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 5
-			out, err = wrapTLV(innerPayload,
+			enc, err = wrapTLV(enc,
 				aTag(classC, true, uint32(r.Tag())))
 		}
 	}
 
-	return out, err
+	return enc, err
 }
 
 func (r *FilterGreaterOrEqual) Decode(enc []byte) error {
-	// Outer wrapper: [5] AttributeValueAssertion
-	p := 0
-	inner, err := readECTLV(enc, &p, classC, uint32(r.Tag()))
+	var err error
+	enc, err = unwrapTLV(enc,
+		aTag(classC, true, uint32(r.Tag()))) // CONTEXT-SPECIFIC [5] (AVA)
 
 	if err == nil {
-		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
+		// Now payload is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
-		var seq []byte
-		seq, err = wrapTLV(inner, uSeqTag())
+		enc, err = wrapTLV(enc, uSeqTag())
 
 		if err == nil {
 			var ava AttributeValueAssertion
-			if err = ava.Decode(seq); err == nil {
+			if err = ava.Decode(enc); err == nil { // SEQUENCE (AVA)
 				*r = FilterGreaterOrEqual(ava)
 			}
 		}
@@ -304,41 +303,33 @@ func (r *FilterGreaterOrEqual) Decode(enc []byte) error {
 }
 
 func (r FilterLessOrEqual) Encode() ([]byte, error) {
-	enc, err := AttributeValueAssertion(r).Encode()
-	var out []byte
+	enc, err := AttributeValueAssertion(r).Encode() // SEQUENCE
 	if err == nil {
-		var payload []byte
-		p := 0
-		payload, err = readECTLV(enc, &p, classU, uint32(tSeq))
-
+		enc, err = unwrapTLV(enc, aTag(classU, true, uint32(tSeq))) // SEQUENCE (remove)
 		if err == nil {
 			// Wrap as Filter lessOrEqual: [6] AttributeValueAssertion
 			// ClassContextSpecific, constructed = true, tagNum = 6
-			out, err = wrapTLV(payload,
-				aTag(classC, true, uint32(r.Tag())))
+			enc, err = wrapTLV(enc,
+				aTag(classC, true, uint32(r.Tag()))) // CONTEXT-SPECIFIC [6]
 		}
 	}
 
-	return out, err
+	return enc, err
 }
 
 func (r *FilterLessOrEqual) Decode(enc []byte) error {
-	p := 0
-
-	// Outer wrapper: [6] AttributeValueAssertion
-	inner, err := readECTLV(enc, &p,
-		classC, uint32(r.Tag()))
-
+	var err error
+	enc, err = unwrapTLV(enc,
+		aTag(classC, true, uint32(r.Tag()))) // CONTEXT-SPECIFIC [6] (AVA)
 	if err == nil {
 		// Now inner is the raw SEQUENCE payload of AttributeValueAssertion.
 		// AttributeValueAssertion.Decode expects the full SEQUENCE TLV,
 		// not just the payload, so we must re-wrap it.
-		var seq []byte
-		seq, err = wrapTLV(inner, uSeqTag())
+		enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
 
 		if err == nil {
 			var ava AttributeValueAssertion
-			if err = ava.Decode(seq); err == nil {
+			if err = ava.Decode(enc); err == nil { // SEQUENCE (AVA)
 				*r = FilterLessOrEqual(ava)
 			}
 		}
@@ -487,54 +478,31 @@ func (r *FilterExtensibleMatch) Decode(enc []byte) error {
 }
 
 func (r AttributeValueAssertion) Encode() ([]byte, error) {
-	var payload []byte
+	var enc []byte
 
-	// attributeDesc
-	ad := AttributeDescription(r.Desc)
-	encDesc, err := ad.Encode()
-	if err != nil {
-		return nil, err
+	val, err := r.Desc.Encode()
+	if err == nil {
+		enc = append(enc, val...) // attributeDesc (OCTET STRING)
+		val, err = OctetString(r.Value).Encode()
+		if err == nil {
+			enc = append(enc, val...)          // assertionValue (OCTET STRING)
+			enc, err = wrapTLV(enc, uSeqTag()) // SEQUENCE
+
+		}
 	}
-	payload = append(payload, encDesc...)
 
-	// assertionValue
-	o := OctetString(r.Value)
-	encVal, err := o.Encode()
-	if err != nil {
-		return nil, err
-	}
-	payload = append(payload, encVal...)
-
-	// wrap both in SEQUENCE
-	return wrapTLV(payload, uSeqTag())
+	return enc, err
 }
 
 func (r *AttributeValueAssertion) Decode(enc []byte) error {
-
-	// Outer SEQUENCE
-	p := 0
-	payload, err := readECTLV(enc, &p, classU, uint32(tSeq))
-
+	payload, err := unwrapTLV(enc, uSeqTag()) // SEQUENCE
 	if err == nil {
-		p2 := 0
-		// Reset receiver
-		*r = AttributeValueAssertion{}
-
-		// First child: attributeDesc (OCTET STRING)
-		var childPayload []byte
-		childPayload, err = readEPTLV(payload, &p2,
-			classU, uint32(tOct))
-
+		p := 0
+		r.Desc, err = readEPTLV(payload, &p,
+			classU, uint32(tOct)) // attributeDescr (OCTET STRING)
 		if err == nil {
-			r.Desc = childPayload
-
-			// Second child: assertionValue (OCTET STRING)
-			childPayload, err = readEPTLV(payload, &p2,
-				classU, uint32(tOct))
-
-			if err == nil {
-				r.Value = childPayload
-			}
+			r.Value, err = readEPTLV(payload, &p,
+				classU, uint32(tOct)) // assertionValue (OCTET STRING)
 		}
 	}
 

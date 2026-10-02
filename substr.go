@@ -124,25 +124,21 @@ func (r *Substrings) Decode(enc []byte) error {
 			break
 		}
 
-		if first := childPayload[0]; first != tOct {
-			err = asn1Error("Substring: unexpected tag ",
-				itoa(int(first)))
+		if childTag.Class != classC {
+			err = asn1Error("Substring: unexpected class; want 2, got ",
+				itoa(int(childTag.Class)))
 			break
 		}
 
-		var dec OctetString
 		switch childTag.Tag {
 		case uint32(tagSubstringInitial):
-			err = dec.Decode(childPayload)
-			Init = SubstringInitial(dec)
+			Init = SubstringInitial(childPayload)
 
 		case uint32(tagSubstringAny):
-			err = dec.Decode(childPayload)
-			Any = append(Any, AssertionValue(dec))
+			Any = append(Any, AssertionValue(childPayload))
 
 		case uint32(tagSubstringFinal):
-			err = dec.Decode(childPayload)
-			Final = SubstringFinal(dec)
+			Final = SubstringFinal(childPayload)
 
 		default:
 			err = asn1Error("Substring: unexpected tag ",
@@ -183,18 +179,15 @@ func (r SubstringFinal) IsZero() bool   { return len(r) == 0 }
 func (r SubstringAny) IsZero() bool     { return len(r) == 0 }
 
 func (r SubstringAny) Encode() ([]byte, error) {
-	payload := make([]byte, 0)
+	out := make([]byte, 0)
 
 	var err error
 	for i := 0; i < len(r) && err == nil; i++ {
-		var enc []byte
-		enc, err = OctetString(r[i]).Encode()
-		payload = append(payload, enc...)
-	}
-
-	var out []byte
-	if err == nil {
-		out, err = wrapTLV(payload, aTag(classC, true, uint32(r.Tag())))
+		var val []byte
+		val, err = wrapTLV(r[i], aTag(classC, false, uint32(r.Tag())))
+		if err == nil {
+			out = append(out, val...)
+		}
 	}
 
 	return out, err
@@ -202,23 +195,13 @@ func (r SubstringAny) Encode() ([]byte, error) {
 
 func (r *SubstringAny) Decode(enc []byte) error {
 
-	payload, err := unwrapTLV(enc, aTag(classC, true, uint32(r.Tag())))
-	if err != nil {
-		return err
-	}
-
 	p2 := 0
-	for p2 < len(payload) && err == nil {
-		var childTag Tag
-		var childPayload []byte
-		if childTag, childPayload, err = readCTLV(payload, &p2); err == nil {
-			if childTag.Tag != uint32(tOct) {
-				err = asn1Error("Substring.Any Assertion Value: want %d, got %d",
-					itoa(int(tOct)),
-					itoa(int(childTag.Tag)))
-				break
-			}
-			*r = append(*r, AssertionValue(childPayload))
+	var err error
+	for p2 < len(enc) && err == nil {
+		var val []byte
+		val, err = readEPTLV(enc, &p2, classC, uint32(r.Tag()))
+		if err == nil {
+			*r = append(*r, AssertionValue(val))
 		}
 	}
 
@@ -234,17 +217,13 @@ func (r SubstringFinal) Encode() ([]byte, error) {
 }
 
 func encodeSubstringInitOrFinal(x Substring) (out []byte, err error) {
-	var enc []byte
 	switch tv := x.(type) {
 	case SubstringInitial:
-		enc, err = OctetString(tv).Encode()
+		out, err = wrapTLV(tv, aTag(classC, false, uint32(tv.Tag())))
 	case SubstringFinal:
-		enc, err = OctetString(tv).Encode()
+		out, err = wrapTLV(tv, aTag(classC, false, uint32(tv.Tag())))
 	}
 
-	if err == nil {
-		out, err = wrapTLV(enc, aTag(classC, false, uint32(x.Tag())))
-	}
 	return out, err
 }
 
@@ -265,28 +244,26 @@ func (r *SubstringFinal) Decode(enc []byte) error {
 }
 
 func decodeSubstringInitOrFinal(enc []byte) (sub Substring, err error) {
-	p := 0
+	tag, _ := readTag(enc)
+	if tag.Class != classC {
+		err = asn1Error("Substring: unexpected class; want 2, got ", itoa(int(tag.Class)))
+		return
+	}
 
-	var tag Tag
-	var payload []byte
-
-	if tag, payload, err = readCTLV(enc, &p); err == nil {
-		p2 := 0
-		var val []byte
-		if _, val, err = readCTLV(payload, &p2); err == nil {
-			switch uint32(tag.Tag) {
-			case tagSubstringInitial:
-				if err == nil {
-					sub = SubstringInitial(val)
-				}
-			case tagSubstringFinal:
-				if err == nil {
-					sub = SubstringFinal(val)
-				}
-			default:
-				err = asn1Error("Substring: unexpected tag ", itoa(int(tag.Tag)))
-			}
+	var val []byte
+	switch uint32(tag.Tag) {
+	case tagSubstringInitial:
+		val, err = unwrapTLV(enc, aTag(classC, false, tag.Tag))
+		if err == nil {
+			sub = SubstringInitial(val)
 		}
+	case tagSubstringFinal:
+		val, err = unwrapTLV(enc, aTag(classC, false, tag.Tag))
+		if err == nil {
+			sub = SubstringFinal(val)
+		}
+	default:
+		err = asn1Error("Substring: unexpected tag; want 0 or 2, got ", itoa(int(tag.Tag)))
 	}
 
 	return
