@@ -1,10 +1,17 @@
 package syntax
 
 /*
-approx.go implements approximate matching.  Note that
-officially, there is no standard algorithm for such
-matching, as the design is left up to the various
-directory products which *might* implement it.
+approx.go implements approximate matching.
+
+Note that officially, there is no standard algorithm for such matching,
+as the design is left up to the various directory products which might
+choose to implement it.
+
+Therefore, due to the ¯\_(ツ)_/¯ nature of this pseudo-standard, this
+file aims for compatibility as the top priority. In the future, we might
+allow custom closures to supplant our generalized implementation if the
+user needs better performance, for instance, and wishes to craft their
+own algorithm(s).
 */
 
 // consonant class table (same groups Soundex uses)
@@ -17,11 +24,11 @@ var classTable = [256]byte{
 	'r': '6',
 }
 
-// normalize produces a phonetic code similar to soundex
+// approxNormalize produces a phonetic code similar to soundex
 // but encodes the first letter instead of preserving it.
-func normalize(s string) string {
+func approxNormalize(s []byte) []byte {
 	if len(s) == 0 {
-		return ""
+		return nil
 	}
 
 	// lowercase
@@ -57,11 +64,11 @@ func normalize(s string) string {
 		}
 	}
 
-	return string(out)
+	return out
 }
 
 // levenshtein distance
-func levenshtein(a, b string) int {
+func levenshtein(a, b []byte) int {
 	la := len(a)
 	lb := len(b)
 
@@ -107,19 +114,22 @@ func levenshtein(a, b string) int {
 	return prev[lb]
 }
 
-// ApproxMatch implements a reliable approximateMatch rule.
-func ApproxMatch(realVal, assertionVal string) bool {
-	r := normalize(realVal)
-	a := normalize(assertionVal)
+/*
+ApproxMatch implements a reliable approximateMatch rule for use during
+the processing of [FilterApproximateMatch] assertions.
+*/
+func ApproxMatch(realVal, assertionVal []byte) bool {
+	r := approxNormalize(realVal)
+	a := approxNormalize(assertionVal)
 
 	// phonetic match
-	if r == a {
+	if beq(r, a) {
 		return true
 	}
 
 	// first-consonant substitution rule
 	if len(r) == len(a) && len(r) > 1 {
-		if r[1:] == a[1:] {
+		if beq(r[1:], a[1:]) {
 			return true
 		}
 	}
