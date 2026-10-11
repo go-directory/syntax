@@ -24,36 +24,30 @@ var (
 func b2s(b []byte) string { return string(b) }
 func s2b(b string) []byte { return []byte(b) }
 
-func beq(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+func beq(a, b []byte) (eq bool) {
+	if eq = len(a) == len(b); eq {
+		for i := 0; i < len(a) && eq; i++ {
+			eq = a[i] == b[i]
 		}
 	}
-	return true
+	return
 }
 
-func beqf(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		aa := a[i]
-		bb := b[i]
-		if aa >= 'A' && aa <= 'Z' {
-			aa += 'a' - 'A'
-		}
-		if bb >= 'A' && bb <= 'Z' {
-			bb += 'a' - 'A'
-		}
-		if aa != bb {
-			return false
+func beqf(a, b []byte) (eq bool) {
+	if eq = len(a) == len(b); eq {
+		for i := 0; i < len(a) && eq; i++ {
+			aa := a[i]
+			bb := b[i]
+			if isUAlpha(rune(aa)) {
+				aa += 'a' - 'A'
+			}
+			if isUAlpha(rune(bb)) {
+				bb += 'a' - 'A'
+			}
+			eq = aa == bb
 		}
 	}
-	return true
+	return
 }
 
 func lc(b []byte) []byte {
