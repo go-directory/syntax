@@ -168,6 +168,10 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 OCTET STRING value.
 */
 func (r OctetString) Encode() ([]byte, error) {
+	if len(r) == 0 {
+		// OctetString MAY be zero
+		return []byte{0x04, 0x00}, nil
+	}
 	return encodeP(tOct, r)
 }
 
@@ -179,6 +183,12 @@ not be truncated, and must bear the OCTET STRING tag (0x04).
 func (r *OctetString) Decode(enc []byte) error {
 	if len(enc) < 2 || enc[0] != tOct {
 		return errOctetDecode
+	} else if enc[0] == 0x04 && enc[1] == 0x00 {
+		// If there is only a T/L with no V,
+		// just nuke the receiver and return
+		// w/o error.
+		*r = OctetString{}
+		return nil
 	}
 
 	l, n := readLen(enc[1:])
