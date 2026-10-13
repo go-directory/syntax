@@ -1,17 +1,22 @@
 package syntax
 
 /*
-approx.go implements approximate matching.
+approx.go implements approximate matching using (very crude) soundex (ish)
+and Levenstein Distance mechanics.
 
 Note that officially, there is no standard algorithm for such matching,
 as the design is left up to the various directory products which might
 choose to implement it.
 
 Therefore, due to the ¯\_(ツ)_/¯ nature of this pseudo-standard, this
-file aims for compatibility as the top priority. In the future, we might
-allow custom closures to supplant our generalized implementation if the
-user needs better performance, for instance, and wishes to craft their
-own algorithm(s).
+file aims for compatibility as the top priority, hence the aforementioned
+mechanics chosen.
+
+In the future, we might allow custom closures to supplant our generalized
+implementation if the directory needs better performance, for instance, and
+the admin wishes to craft their own algorithm(s).
+
+TODO: document or diagram algorithms below. somehow.
 */
 
 // consonant class table (same groups Soundex uses)
