@@ -109,9 +109,7 @@ func (r BMPString) IsZero() bool { return r == nil }
 BMPString marshals x into a BMPString (UTF-16) return value, returning
 an instance of [BMPString] alongside an error.
 */
-func NewBMPString(x any) (BMPString, error) {
-	return assertBMPString(x)
-}
+func NewBMPString(x any) (BMPString, error) { return assertBMPString(x) }
 
 func assertBMPString(x any) (enc BMPString, err error) {
 	var e []byte
