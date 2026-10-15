@@ -1,6 +1,6 @@
 module github.com/go-directory/syntax
 
-go 1.26.7
+go 1.27.2
 
 require (
 	github.com/go-directory/common v0.0.0-20261011092812-ee1a68d2b0cb
