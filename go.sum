@@ -8,6 +8,8 @@ github.com/go-directory/common v0.0.0-20261011084555-4a29ce28b730 h1:zQeddScaDia
 github.com/go-directory/common v0.0.0-20261011084555-4a29ce28b730/go.mod h1:38wymd8zkOxcZC/oRKK8a82xopDQRSz42XTd97NKgqg=
 github.com/go-directory/common v0.0.0-20261011092812-ee1a68d2b0cb h1:RXlaLD3QXih8g5kijTpBNC+7ggawbokPuj7KIl7mRVo=
 github.com/go-directory/common v0.0.0-20261011092812-ee1a68d2b0cb/go.mod h1:38wymd8zkOxcZC/oRKK8a82xopDQRSz42XTd97NKgqg=
+github.com/go-directory/common v0.0.0-20261015062816-e8d71838f720 h1:uwCCK+kkiae+MQ2SGmztUr20oIGOjA47X0hNXqW11aU=
+github.com/go-directory/common v0.0.0-20261015062816-e8d71838f720/go.mod h1:PFlbjODkcvDFXO8FZU+WFvq4ThT7cErjxdY6VrAol74=
 github.com/go-directory/encoding v0.0.0-20260919011600-1009bf2f8a5d h1:wLSejESQ0BArJqaSAydYWa/3DcVGlx+4kLWx3aRZL0A=
 github.com/go-directory/encoding v0.0.0-20260919011600-1009bf2f8a5d/go.mod h1:SK7qtKZ4th6D8O4x0cOgrYOOrkMyq9BmeFtiqrchmls=
 github.com/go-directory/encoding v0.0.0-20260919203334-74be31c117a3 h1:/mx3stlxL+GeWTlOPFGev7pS9g6Ytc9c9u+xV7vMLGw=
@@ -28,5 +30,7 @@ github.com/go-directory/encoding v0.0.0-20261011084728-f1233ee48fc3 h1:/THgejHmJ
 github.com/go-directory/encoding v0.0.0-20261011084728-f1233ee48fc3/go.mod h1:2mwmUZD6W9rFmUVEdBBfQn5ELINrnMr8glqutifspQ8=
 github.com/go-directory/encoding v0.0.0-20261011092854-e58281c8ca90 h1:QeAFW1n63mhjOUj6k6RSR+2NELbiFucBLSoG0OeukXI=
 github.com/go-directory/encoding v0.0.0-20261011092854-e58281c8ca90/go.mod h1:EQc/NioNF0gqovnSrKj3gdA6tmh3ST0FF/VhI4Ib5FM=
+github.com/go-directory/encoding v0.0.0-20261015063109-52bfbd1e4011 h1:A1alVnROVrZf6LdsyUctZI1kaiGN3YZU8ujBE/Nb/+0=
+github.com/go-directory/encoding v0.0.0-20261015063109-52bfbd1e4011/go.mod h1:CbGTrNCfq1900o2HjDX7796Lr+UkCRS29cgZsf1r3Yo=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
