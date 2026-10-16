@@ -53,7 +53,7 @@ func TestUUIDMatch(t *testing.T) {
 				t.Errorf("%s[%d] [ordering] failed: %v", t.Name(), idx, err)
 				return
 			} else if !result {
-				t.Errorf("%s[%d] [ordering] failed:\n\twant: %s\n\tgot:  %t", t.Name(), idx, `TRUE`, result)
+				t.Errorf("%s[%d] [ordering] failed:\n\twant: %t\n\tgot:  %t", t.Name(), idx, true, result)
 				return
 			}
 
@@ -61,15 +61,15 @@ func TestUUIDMatch(t *testing.T) {
 				t.Errorf("%s[%d] [equality] failed: %v", t.Name(), idx, err)
 				return
 			} else if result {
-				t.Errorf("%s[%d] [equality] failed:\n\twant: %s\n\tgot:  %t", t.Name(), idx, `FALSE`, result)
+				t.Errorf("%s[%d] [equality] failed:\n\twant: %t\n\tgot:  %t", t.Name(), idx, false, result)
 				return
 			}
 
 			if result, _ = uUID(obj.UUID1); !result {
-				t.Errorf("%s[%d] [syntax] failed: %v\n\twant: %s\n\tgot:  %t", t.Name(), idx, err, `TRUE`, result)
+				t.Errorf("%s[%d] [syntax] failed: %v\n\twant: %t\n\tgot:  %t", t.Name(), idx, err, true, result)
 				return
 			} else if result, _ = uUID(obj.UUID2); !result {
-				t.Errorf("%s[%d] [syntax] failed: %v\n\twant: %s\n\tgot:  %t", t.Name(), idx, err, `TRUE`, result)
+				t.Errorf("%s[%d] [syntax] failed: %v\n\twant: %t\n\tgot:  %t", t.Name(), idx, err, true, result)
 				return
 			}
 		} else {
