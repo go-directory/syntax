@@ -2,8 +2,7 @@ package syntax
 
 import (
 	"bytes"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 /*
@@ -31,13 +30,16 @@ From [§ 3 of RFC 4122]:
 */
 type UUID uuid.UUID
 
-var uuidFromBytes func([]byte) (uuid.UUID, error) = uuid.FromBytes
-
 /*
 UUID returns an instance of [UUID] alongside an error.
+
+If no argument is provided, a new [uuid.UUID] is generated and
+returned. If an argument is provided, it is parsed as a UUID.
+
+Valid input types are string or []byte.
 */
-func NewUUID(x any) (UUID, error) {
-	return marshalUUID(x)
+func NewUUID(x ...any) (UUID, error) {
+	return marshalUUID(x...)
 }
 
 /*
@@ -55,30 +57,24 @@ uuidMatch compares UUIDs a and b to gauge their equality.
 */
 func uuidMatch(a, b any) (result bool, err error) {
 	var au, bu UUID
-	if au, err = marshalUUID(a); err != nil {
-		return
+	if au, err = marshalUUID(a); err == nil {
+		if bu, err = marshalUUID(b); err == nil {
+			result = bytes.Compare(au[:], bu[:]) == 0
+		}
 	}
-	if bu, err = marshalUUID(b); err != nil {
-		return
-	}
-
-	result = bytes.Compare(au[:], bu[:]) == 0
 	return
 }
 
 func uuidOrderingMatch(a any, operator byte, b any) (result bool, err error) {
 	var au, bu UUID
-	if au, err = marshalUUID(a); err != nil {
-		return
-	}
-	if bu, err = marshalUUID(b); err != nil {
-		return
-	}
-
-	if operator == GreaterOrEqual {
-		result = bytes.Compare(au[:], bu[:]) > 0
-	} else {
-		result = bytes.Compare(au[:], bu[:]) < 0
+	if au, err = marshalUUID(a); err == nil {
+		if bu, err = marshalUUID(b); err == nil {
+			if operator == GreaterOrEqual {
+				result = bytes.Compare(au[:], bu[:]) > 0
+			} else {
+				result = bytes.Compare(au[:], bu[:]) < 0
+			}
+		}
 	}
 
 	return
@@ -88,22 +84,19 @@ func uuidOrderingMatch(a any, operator byte, b any) (result bool, err error) {
 marshalUUID returns an instance of [UUID] alongside an error
 following an attempt to marshal x as an RFC 4530 UUID.
 */
-func marshalUUID(x any) (u UUID, err error) {
-	var raw string
+func marshalUUID(x ...any) (u UUID, err error) {
+	if len(x) == 0 {
+		u = UUID(uuid.New())
+		return
+	}
 
-	switch tv := x.(type) {
+	var raw []byte
+
+	switch tv := x[0].(type) {
 	case string:
-		if l := len(tv); l != 36 {
-			err = errorBadLength("UUID", len(tv))
-			return
-		}
-		raw = tv
+		raw = []byte(tv)
 	case []byte:
-		if l := len(tv); l != 36 {
-			err = errorBadLength("UUID", len(tv))
-			return
-		}
-		raw = string(tv)
+		raw = tv
 	case UUID:
 		u = tv
 		return
@@ -113,7 +106,7 @@ func marshalUUID(x any) (u UUID, err error) {
 	}
 
 	var _u uuid.UUID
-	if _u, err = uuid.Parse(raw); err == nil {
+	if err = _u.UnmarshalText(raw); err == nil {
 		u = UUID(_u)
 	}
 
