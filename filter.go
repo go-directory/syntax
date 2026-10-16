@@ -13,7 +13,7 @@ import (
 /*
 NewFilter returns a [Filter] qualifier instance alongside an error.
 
-If the input is nil, [DefaultFilter] ([FilterPresent]) is returned
+If the input is nil, [FilterDefault] ([FilterPresent]) is returned
 ("(objectClass=*)").
 
 If the input is a []byte or string, an attempt to marshal the value
@@ -30,7 +30,7 @@ func NewFilter(x any) (Filter, error) {
 }
 
 /*
-DefaultFilter implements the official default LDAP Search [Filter] of
+FilterDefault implements the official default LDAP Search [Filter] of
 "(objectClass=*)".
 */
 var FilterDefault Filter = FilterPresent{Desc: AttributeDescription(`objectClass`)}
@@ -40,11 +40,11 @@ func marshalFilter(x any) (f Filter, err error) {
 	switch tv := x.(type) {
 	case nil:
 		// Nil returns the default filter.
-		f = DefaultFilter
+		f = FilterDefault
 		return
 	case []byte:
 		if len(tv) == 0 {
-			f = DefaultFilter
+			f = FilterDefault
 			return
 		}
 		raw = tv
@@ -53,7 +53,7 @@ func marshalFilter(x any) (f Filter, err error) {
 		return
 	case string:
 		if len(tv) == 0 {
-			f = DefaultFilter
+			f = FilterDefault
 			return
 		}
 		raw = []byte(tv)
@@ -822,7 +822,7 @@ func (r MatchingRuleAssertion) IsZero() bool {
 
 func parseSubFilter(input []byte) (f Filter, err error) {
 	if input = bytes.TrimSpace(input); len(input) == 0 {
-		f = DefaultFilter
+		f = FilterDefault
 		return
 	} else if bytes.Contains(input, []byte(`((`)) || !checkParenBalanced(input) {
 		err = endOfFilterErr
@@ -1217,7 +1217,7 @@ based on the contents of the input Refinement instance.
 */
 func refinementToFilter(r Refinement) (f Filter) {
 	if r == nil {
-		f = DefaultFilter
+		f = FilterDefault
 		return
 	}
 
