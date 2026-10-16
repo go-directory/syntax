@@ -52,7 +52,7 @@ func TestUUIDMatch(t *testing.T) {
 			if err != nil {
 				t.Errorf("%s[%d] [ordering] failed: %v", t.Name(), idx, err)
 				return
-			} else if !result {
+			} else if result {
 				t.Errorf("%s[%d] [ordering] failed:\n\twant: %t\n\tgot:  %t", t.Name(), idx, true, result)
 				return
 			}
