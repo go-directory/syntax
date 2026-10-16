@@ -30,10 +30,10 @@ func NewFilter(x any) (Filter, error) {
 }
 
 /*
-DefaultFilter implements the official default LDAP Search Filter of
+DefaultFilter implements the official default LDAP Search [Filter] of
 "(objectClass=*)".
 */
-var DefaultFilter Filter = FilterPresent{Desc: AttributeDescription(`objectClass`)}
+var FilterDefault Filter = FilterPresent{Desc: AttributeDescription(`objectClass`)}
 
 func marshalFilter(x any) (f Filter, err error) {
 	var raw []byte
