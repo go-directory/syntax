@@ -149,11 +149,16 @@ Encode returns an instance of []byte alongside an error following an
 attempt to encode the receiver instance as an ASN.1 INTEGER value.
 */
 func (r Integer) Encode() ([]byte, error) {
-	if !r.ok {
-		return nil, errIntCodec
+	var enc []byte
+	if !r.ok || r.IsZero() {
+		// Integer needs special handling for uninitialized
+		// instances, and should not return an error if unset
+		// when encode is called. Instead provide the minimum
+		// payload and exit.
+		enc = []byte{tInt, 0x00}
+		return enc, nil
 	}
 
-	var enc []byte
 	if r.big {
 		enc = encInt[*big.Int](r.bigInt)
 	} else {
