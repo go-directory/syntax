@@ -2,13 +2,14 @@ package syntax
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/go-directory/common"
 )
 
+type commonErr = common.Error
+
 func errorBadLength(name string, length int) error {
-	return errors.New(`Invalid length '` + strconv.FormatInt(int64(length), 10) + `' for ` + name)
+	return errors.New(`Invalid length '` + fint(int64(length), 10) + `' for ` + name)
 }
 
 func errorBadType(name string) error {
@@ -20,22 +21,15 @@ func syntaxError(msg ...string) error {
 }
 
 // non-asn1 encoding errors
-func encodingError(msg ...string) error {
-	return common.LDAPResultOther.New(msg...)
+func encodingError(msg ...string) (err commonErr) {
+	err = common.LDAPResultOther.New(msg...)
+	err.SetHeader("encoding:")
+	return
 }
 
-func asn1Error(msg ...string) error {
-	m := append([]string{"ASN.1 "}, msg...)
-	return common.ErrorASN1.New(m...)
+func asn1Error(msg ...string) (err commonErr) {
+	err = common.ErrorASN1.New(msg...)
+	err.SetHeader("ASN.1:")
+	return
 }
 
-func zeroE(err error) bool { return common.ZeroError(err) }
-
-func setDiag(err error, msg ...string) error {
-	if is, ok := err.(common.Error); ok {
-		is.SetDiag(msg...)
-		err = is
-	}
-
-	return err
-}
