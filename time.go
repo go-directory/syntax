@@ -300,11 +300,11 @@ func timeMatch(rcv, assert any, operator ...byte) (result bool, err error) {
 		if len(operator) == 1 {
 			if operator[0] == GreaterOrEqual {
 				result = compareTimes(assert, utc, func(thyme time.Time) bool {
-					return c.Before(thyme) || c.Equal(thyme)
+					return c.After(thyme) || c.Equal(thyme)
 				})
 			} else {
 				result = compareTimes(assert, utc, func(thyme time.Time) bool {
-					return c.After(thyme) || c.Equal(thyme)
+					return c.Before(thyme) || c.Equal(thyme)
 				})
 			}
 		} else {
