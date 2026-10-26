@@ -186,6 +186,8 @@ func (r *Integer) Decode(enc []byte) error {
 		r.native, err = decInt[int64](enc)
 	}
 
+	r.ok = err == nil
+
 	return err
 }
 
@@ -232,6 +234,39 @@ func (r Integer) Big() (i *big.Int) {
 	}
 
 	return
+}
+
+/*
+Increment shall increment or (if x is negative) decrement the
+receiver magnitude according to the magnitude of x.
+*/
+func (r *Integer) Increment(x any) {
+	if i, err := assertInteger(x); err == nil && r.ok {
+		ib := i.IsBig()
+		rb := r.IsBig()
+
+		switch {
+		case ib && !rb:
+			r.upgrade()
+			r.bigInt.Add(r.bigInt, i.Big())
+		case rb && !ib:
+			r.bigInt.Add(r.bigInt, i.Big())
+		case ib && rb:
+			r.bigInt.Add(r.bigInt, i.Big())
+		default:
+			r.native += i.native
+		}
+	}
+}
+
+/*
+native -> big
+*/
+func (r *Integer) upgrade() {
+	if !r.IsBig() && r.ok {
+		r.bigInt = newBigInt(0).SetInt64(r.native)
+		r.native = 0
+	}
 }
 
 /*

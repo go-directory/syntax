@@ -18,6 +18,20 @@ func BenchmarkIntegerASN1(b *testing.B) {
 	}
 }
 
+func ExampleInteger_Increment_plus5() {
+	o, _ := NewInteger(1234)
+	o.Increment(5)
+	fmt.Println(o)
+	// Output: 1239
+}
+
+func ExampleInteger_Increment_minus5() {
+	o, _ := NewInteger(1234)
+	o.Increment(-5)
+	fmt.Println(o)
+	// Output: 1229
+}
+
 func ExampleInteger_roundTripBER() {
 	i, err := NewInteger(1478231)
 	if err != nil {
