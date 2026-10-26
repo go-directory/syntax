@@ -83,12 +83,37 @@ func TestDistinguisedName(t *testing.T) {
 	} else if len(dn.Normal) == 0 {
 		t.Fatalf("%s preprocessing failed: no normalized DN", t.Name())
 	}
-
 	dn.Boundary = 1
 
+	other, _ := NewDistinguishedName([]byte(`cn=shorty`), true)
+	subou, _ := other.Subordinate("ou=test")
+	subshort, _ := subou.Subordinate("cn=leaf")
+
+	var anc []DistinguishedName
+	if anc, err = subshort.Ancestry(); err != nil {
+		t.Fatalf("%s ancestry failed: %v", t.Name(), err)
+	}
+	if want := []byte(`cn=leaf,ou=test,cn=shorty`); !beq(anc[0].Normal, want) {
+		t.Fatalf("%s unbounded ancestry failed:\n\twant: %q\n\tgot:  %q", t.Name(), want, anc[0].Normal)
+	}
+	//for i := 0; i < len(anc); i++ {
+	//	t.Logf("[%d]: %s", i, anc[i].Case)
+	//}
+	if anc, err = dn.Ancestry(); err != nil {
+		t.Fatalf("%s dn failed: %v", t.Name(), err)
+	}
+	if !beq(anc[0].Case, orig) {
+		t.Fatalf("%s bounded ancestry failed:\n\twant: %q\n\tgot:  %q", t.Name(), orig, anc[0].Case)
+	}
+
+	small, _ := NewDistinguishedName([]byte("cn=schema"), true)
+	t.Logf("small: %t (expect true)", small.IsRoot())
+
 	root, _ := dn.Root()
+	t.Logf("IsRoot:%t (expect true)", root.IsRoot())
 	sup, _ := dn.Superior()
 	sub, _ := dn.Subordinate("cn=Private Mailing List")
+	t.Logf("IsRoot:%t (expect false)", sub.IsRoot())
 
 	want := `dc=example,dc=com`
 	if got := string(root.Case); got != want {

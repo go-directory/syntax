@@ -244,7 +244,7 @@ Depth returns the logical depth from leaf to root.
 
 Under ordinary circumstances, in which the "Boundary" of the receiver
 is the default of zero (0), this method simply returns the length of
-the underlying "RDNs" slice.
+the underlying [RDNSequence] component value.
 
 However if a non-zero "Boundary" is set, it is subtracted from the
 return value.
@@ -271,6 +271,7 @@ func (r DistinguishedName) Root() (root DistinguishedName, err error) {
 			// No boundary is set, or boundary is bogus
 			root.RDNs = append(root.RDNs, r.RDNs[len(r.RDNs)-1])
 		default:
+			root.Boundary = r.Boundary
 			root.RDNs = r.RDNs[r.Depth()-1:]
 		}
 		if len(r.Normal) > 0 {
@@ -279,6 +280,116 @@ func (r DistinguishedName) Root() (root DistinguishedName, err error) {
 	}
 
 	return
+}
+
+/*
+Ancestry returns slices of [DistinguishedName], each representing a
+single generation from the lineage. The slices are ordered from leaf
+(left) to root (right).
+*/
+func (r DistinguishedName) Ancestry() ([]DistinguishedName, error) {
+	var anc []DistinguishedName
+
+	var err error
+	if len(r.RDNs) == 0 {
+		err = errZeroDN
+		return anc, err
+	}
+
+	B := int(r.Boundary)
+	D := r.Depth()
+	proc := r.Normal != nil
+	root := r.IsRoot()
+
+	if root {
+		anc = []DistinguishedName{r}
+		return anc, err
+	}
+
+	X := (D - B)
+	if B == 0 {
+		X = X - 1
+	}
+
+	for i := 0; i < X+1 && err == nil; i++ {
+		slice := DistinguishedName{RDNs: r.RDNs[i:]}
+
+		var gen DistinguishedName
+		gen, err = NewDistinguishedName([]byte(slice.String()), proc)
+		gen.Boundary = r.Boundary
+		anc = append(anc, gen)
+	}
+
+	return anc, err
+}
+
+/*
+IsRoot returns a Boolean value indicative of whether the receiver is
+equal to the decided root of the suffix.
+
+This determination is made based on a comparison of the [RDNSequence]
+length against the underlying "Boundary" uint component. If the length
+of the [RDNSequence] aligns with the minimum length allowed as declared
+through the boundary, the return evaluates as true.
+
+The [RDNSequence] length must be non-zero.
+*/
+func (r DistinguishedName) IsRoot() bool {
+	var is bool
+	if L := len(r.RDNs); uint(L) == r.Boundary+1 && L > 0 {
+		if root, _ := r.Root(); root.Normal != nil {
+			// use our preprocessed values for
+			// efficiency.
+			is = beq(root.Normal, r.Normal)
+		} else {
+			// do a full traversal/comparison
+			is = r.EqualFold(root)
+		}
+	}
+
+	return is
+}
+
+/*
+Relative returns a new [DistinguishedName] bearing only the RDN of the receiver
+instance -- that is, the 0th (far left) slice index of the "RDNs" component --
+derived from the receiver instance.
+
+This method is mainly used for upstream processing with respect to the types and
+values used within the RDN during the handling of certain ProtocolOp requests.
+
+Any DIT structure rules currently in force may also result in calls to this method
+during Add or ModifyDN requests.
+
+The return value is [DistinguishedName] -- and not [RelativeDistinguishedName] --
+simply because we wish to add pre-processed values for the bare relative DN, and
+the current [DistinguishedName] type already has the fields necessary for this.
+In the future, we may opt to port this functionality to [RelativeDistinguishedName]
+as well, at which point we may alter the return signature accordingly, but it is
+not yet clear whether there would be any tangible gain from this effort.
+
+If the receiver instance contains a distinguished name that is only a single
+RDN, the receiver is returned as-is alongside a nil error. If, however, the
+receiver contains zero (0) relative DNs, an error is returned. The relative DN is
+parsed in string representation by the [NewDistinguishedName] function, and with
+preprocessing enabled. If a parsing error occurs, a non nil error is returned.
+
+Note that if a bonafide [RelativeDistinguishedName] is desired, as opposed to
+the return value of [DistinguishedName], simply call the 0th slice index from
+the receiver instance's "RDNs" component instance, [RDNSequence], instead of using
+this method.
+*/
+func (r DistinguishedName) Relative() (DistinguishedName, error) {
+	var rel DistinguishedName
+	var err error
+
+	if len(r.RDNs) == 0 {
+		err = errZeroDN
+	} else {
+		rel, err = NewDistinguishedName([]byte(r.RDNs[0].String()), true)
+	}
+
+	return rel, err
 }
 
 /*
@@ -298,7 +409,8 @@ func (r DistinguishedName) Superior() (sup DistinguishedName, err error) {
 	}
 
 	sup = DistinguishedName{
-		RDNs: r.RDNs[1:],
+		RDNs:     r.RDNs[1:],
+		Boundary: r.Boundary,
 	}
 	if len(r.Normal) > 0 {
 		sup.preprocess()
@@ -318,6 +430,7 @@ The input rdn value must be the string representation of a legal
 func (r DistinguishedName) Subordinate(rdn string) (sub DistinguishedName, err error) {
 	var rDN DistinguishedName
 	if rDN, err = parseDN(rdn); err == nil {
+		rDN.Boundary = r.Boundary
 		sub.RDNs = append([]RelativeDistinguishedName{rDN.RDNs[0]}, r.RDNs...)
 		if len(r.Normal) > 0 {
 			sub.preprocess()
@@ -777,3 +890,7 @@ func (r RelativeDistinguishedName) hasAllAttributesFold(attrs []AttributeTypeAnd
 	}
 	return true
 }
+
+var (
+	errZeroDN = dnError("zero instance")
+)
