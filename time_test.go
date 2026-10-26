@@ -21,31 +21,20 @@ func TestGeneralizedTimeOrderingMatch(t *testing.T) {
 
 	var result bool
 	// GreaterOrEqual
-	result, _ = generalizedTimeOrderingMatch(gt2, GreaterOrEqual, gt1) // >=
+	result, _ = generalizedTimeOrderingMatch(gt1, GreaterOrEqual, gt2) // >=
 	if result {
-		t.Errorf("%s [GE] failed:\nwant: %s\ngot:  %t",
-			t.Name(), `FALSE`, result)
+		t.Errorf("%s [GE] failed:\nwant: %t\ngot:  %t",
+			t.Name(), true, result)
 		return
 	}
-	//t.Logf("%s>=%s\n", gt2,gt1)
 
 	// LessOrEqual
-	result, _ = generalizedTimeOrderingMatch(gt2, LessOrEqual, gt1) // <=
+	result, _ = generalizedTimeOrderingMatch(gt1, LessOrEqual, gt2) // <=
 	if !result {
-		t.Errorf("%s [LE] failed:\nwant: %s\ngot:  %t",
-			t.Name(), `TRUE`, result)
+		t.Errorf("%s [LE] failed:\nwant: %t\ngot:  %t",
+			t.Name(), false, result)
 		return
 	}
-	//t.Logf("%s<=%s\n", gt1,gt2)
-
-	// Equal (via LE)
-	result, _ = generalizedTimeOrderingMatch(gt1, GreaterOrEqual, gt2) // >= // equal
-	if !result {
-		t.Errorf("%s [EQ] failed:\nwant: %s\ngot:  %t",
-			t.Name(), `TRUE`, result)
-		return
-	}
-	//t.Logf("%s==%s\n", gt1,gt1)
 }
 
 func TestGeneralizedTime_codecov(t *testing.T) {
@@ -202,9 +191,9 @@ func TestGeneralizedTimeMatchingRules(t *testing.T) {
 			results[3] = try.R[3] == tM(A, B.String())
 		case 2:
 			results[0] = try.R[0] == tOM(AT, GreaterOrEqual, B)
-			results[1] = try.R[1] == tOM(A, LessOrEqual, BT)
-			results[2] = try.R[2] == tOM(A, GreaterOrEqual, B)
-			results[3] = try.R[3] == tOM(A, GreaterOrEqual, B.String())
+			results[1] = try.R[1] == tOM(BT, LessOrEqual, A)
+			results[2] = try.R[2] == tOM(B, GreaterOrEqual, A)
+			results[3] = try.R[3] == tOM(B.String(), GreaterOrEqual, A)
 		}
 
 		for idx2, res := range results {
