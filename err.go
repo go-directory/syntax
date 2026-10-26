@@ -33,3 +33,8 @@ func asn1Error(msg ...string) (err commonErr) {
 	return
 }
 
+func dnError(msg ...string) (err commonErr) {
+	err = common.LDAPResultInvalidDNSyntax.New(msg...)
+	err.SetHeader("distinguished name:")
+	return err
+}
