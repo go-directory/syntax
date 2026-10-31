@@ -62,6 +62,8 @@ func assertInteger[T any](v T) (i Integer, err error) {
 		i = Integer{native: int64(value)}
 	case string:
 		i, err = strToInteger(value)
+	case []byte:
+		i, err = strToInteger(string(value))
 	case Integer:
 		if !value.ok {
 			err = errorIntNil
@@ -264,7 +266,7 @@ native -> big
 */
 func (r *Integer) upgrade() {
 	if !r.IsBig() && r.ok {
-		r.bigInt = newBigInt(0).SetInt64(r.native)
+                r.bigInt = newBigInt(0).SetInt64(r.native)
 		r.native = 0
 	}
 }
@@ -320,6 +322,9 @@ func (r Integer) cmpAny(x any) (result int) {
 
 	case string:
 		result = r.cmpIntegerStr(t)
+
+	case []byte:
+		result = r.cmpIntegerStr(string(t))
 
 	case *big.Int:
 		result = r.cmpBig(t)
