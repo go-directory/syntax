@@ -16,18 +16,15 @@ func caseExactMatch(a, b any) (result bool, err error) {
 }
 
 func caseBasedMatch(a, b any, caseExact bool) (result bool, err error) {
-	var b1, b2 []byte
-	if b1, err = assertBytes(a, 1, "string"); err != nil {
-		return
-	}
-	if b2, err = assertBytes(b, 1, "string"); err != nil {
-		return
-	}
-
+	fn := beqf
 	if caseExact {
-		result = beq(b1, b2)
-	} else {
-		result = beqf(b1, b2)
+		fn = beq
+	}
+	var b1, b2 []byte
+	if b1, err = assertBytes(a, 1, "string"); err == nil {
+		if b2, err = assertBytes(b, 1, "string"); err == nil {
+			result = fn(b1,b2)
+		}
 	}
 
 	return
@@ -44,20 +41,15 @@ func caseExactOrderingMatch(a any, operator byte, b any) (bool, error) {
 func caseBasedOrderingMatch(a, b any, caseExact bool, operator byte) (result bool, err error) {
 	var b1, b2 []byte
 	if b1, b2, err = prepareNumericBytesAssertion(a, b); err == nil {
-		if caseExact {
-			if operator == GreaterOrEqual {
-				result = bytesCompare(b1, b2) >= 0
-			} else {
-				result = bytesCompare(b1, b2) <= 0
-			}
+		if !caseExact {
+			b1 = lc(b1)
+			b2 = lc(b2)
+		}
+		cmp := bytesCompare(b1, b2)
+		if operator == GreaterOrEqual {
+			result = cmp >= 0
 		} else {
-			l1 := lc(b1)
-			l2 := lc(b2)
-			if operator == GreaterOrEqual {
-				result = bytesCompare(l1, l2) >= 0
-			} else {
-				result = bytesCompare(l1, l2) <= 0
-			}
+			result = cmp <= 0
 		}
 	}
 
