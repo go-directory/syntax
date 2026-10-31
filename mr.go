@@ -18,6 +18,7 @@ MatchingRuleAssertionFunc implements an [EqualityRuleAssertion],
 or method.
 */
 type MatchingRuleAssertionFunc interface {
+	Type() int
 	isMatchingRuleAssertionFunction()
 }
 
@@ -32,6 +33,8 @@ RFC 4517].
 */
 type EqualityRuleAssertion func(any, any) (bool, error)
 
+func (r EqualityRuleAssertion) Type() int { return 0 }
+
 func (r EqualityRuleAssertion) isMatchingRuleAssertionFunction() {}
 
 /*
@@ -44,6 +47,8 @@ RFC 4517].
 [§ 4.1 of RFC 4517]: https://datatracker.ietf.org/doc/html/rfc4517#section-4.1
 */
 type SubstringsRuleAssertion func(any, any) (bool, error)
+
+func (r SubstringsRuleAssertion) Type() int { return 1 }
 
 func (r SubstringsRuleAssertion) isMatchingRuleAssertionFunction() {}
 
@@ -59,6 +64,8 @@ RFC 4517].
 type OrderingRuleAssertion func(any, byte, any) (bool, error)
 
 func (r OrderingRuleAssertion) isMatchingRuleAssertionFunction() {}
+
+func (r OrderingRuleAssertion) Type() int { return 2 }
 
 var MatchingRuleAssertionFuncs map[string]MatchingRuleAssertionFunc
 
