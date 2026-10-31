@@ -437,7 +437,7 @@ func (r AttributeSelection) Process(
 ) (
 	clean AttributeSelection,
 	oid2descr map[string]AttributeDescription,
-	allUA, allOP bool,
+	allUA, allOP, zeroA bool,
 ) {
 	L := len(r)
 	allUA = L == 0 // default
@@ -446,7 +446,14 @@ func (r AttributeSelection) Process(
 	oid2descr = make(map[string]AttributeDescription)
 
 	for i := 0; i < L; i++ {
-		if string(r[i]) == `*` {
+		if string(r[i]) == `1.1` {
+			allUA = false
+			allOP = false
+			clean = AttributeSelection{}
+			oid2descr = nil
+			zeroA = true
+			break
+		} else if string(r[i]) == `*` {
 			allUA = true
 			continue
 		} else if string(r[i]) == `+` {
@@ -471,6 +478,7 @@ func (r AttributeSelection) Process(
 			// preserve any tags
 			princ = append(princ, tags...)
 		}
+
 		oid2descr[aoid] = AttributeDescription(princ)
 		clean = append(clean, LDAPString(noid))
 	}
