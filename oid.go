@@ -265,6 +265,8 @@ func assertObjectIdentifier(id any) (A ObjectIdentifier) {
 	switch tv := id.(type) {
 	case string:
 		A, _ = NewObjectIdentifier(tv)
+	case []byte:
+		A, _ = NewObjectIdentifier(string(tv))
 	case ObjectIdentifier:
 		if tv.Len() >= 0 {
 			A = tv
@@ -919,10 +921,10 @@ func objectIdentifierMatch(a, b any) (result bool, err error) {
 
 	if OIDMap == nil || len(OIDMap) == 0 {
 		// no resolution available. Try a
-		// simple cmp as string values.
-		str1, _ := assertString(a, 1, "string")
-		str2, _ := assertString(b, 1, "string")
-		return str1 == str2, nil
+		// simple cmp.
+		str1, _ := assertBytes(a, 1, "string")
+		str2, _ := assertBytes(b, 1, "string")
+		return beq(str1, str2), nil
 	}
 
 	if err1 != nil {
