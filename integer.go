@@ -266,7 +266,7 @@ native -> big
 */
 func (r *Integer) upgrade() {
 	if !r.IsBig() && r.ok {
-                r.bigInt = newBigInt(0).SetInt64(r.native)
+		r.bigInt = newBigInt(0).SetInt64(r.native)
 		r.native = 0
 	}
 }

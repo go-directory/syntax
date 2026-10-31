@@ -23,7 +23,7 @@ func caseBasedMatch(a, b any, caseExact bool) (result bool, err error) {
 	var b1, b2 []byte
 	if b1, err = assertBytes(a, 1, "string"); err == nil {
 		if b2, err = assertBytes(b, 1, "string"); err == nil {
-			result = fn(b1,b2)
+			result = fn(b1, b2)
 		}
 	}
 
