@@ -30,6 +30,10 @@ func NewBoolean(x any) (b Boolean, err error) {
 		b = tv
 	case bool:
 		b = Boolean(tv)
+	case []byte:
+		var _b bool
+		_b, err = strconv.ParseBool(string(tv))
+		b = Boolean(_b)
 	case string:
 		var _b bool
 		_b, err = strconv.ParseBool(tv)
