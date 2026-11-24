@@ -105,9 +105,19 @@ func TestUUID(t *testing.T) {
 	// a call to Google's uuid.Parse function.
 	for idx, raw := range []string{
 		`f81d4fae-7dec-11d0-a765-00a0c91e6bf6`,
+		`00000000-0000-4000-8000-000000000000`,
 	} {
 		if _, err := NewUUID(raw); err != nil {
 			t.Errorf("%s[%d] failed: %v", t.Name(), idx, err)
+			//} else {
+			//	for i := 0; i < 20; i++ {
+			//		var seqU UUID
+			//		seqU, err = NewSeqUUID(uint64(i))
+			//		if err != nil {
+			//			t.Fatalf("%s[%d][%d] seq UUID failed: %v", t.Name(), idx, i, err)
+			//		}
+			//		t.Logf("%s", seqU)
+			//	}
 		}
 	}
 
