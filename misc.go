@@ -2,10 +2,18 @@ package syntax
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"reflect"
 	"strconv"
 	"strings"
+)
+
+var (
+	putBE   = binary.BigEndian.PutUint64
+	getBE   = binary.BigEndian.Uint64
+	putBE32 = binary.BigEndian.PutUint32
+	getBE32 = binary.BigEndian.Uint32
 )
 
 type textLike interface{ ~string | ~[]byte }
