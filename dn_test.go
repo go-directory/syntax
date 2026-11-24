@@ -106,14 +106,14 @@ func TestDistinguisedName(t *testing.T) {
 		t.Fatalf("%s bounded ancestry failed:\n\twant: %q\n\tgot:  %q", t.Name(), orig, anc[0].Case)
 	}
 
-	small, _ := NewDistinguishedName([]byte("cn=schema"), true)
-	t.Logf("small: %t (expect true)", small.IsRoot())
+	//small, _ := NewDistinguishedName([]byte("cn=schema"), true)
+	//t.Logf("small: %t (expect true)", small.IsRoot())
 
 	root, _ := dn.Root()
-	t.Logf("IsRoot:%t (expect true)", root.IsRoot())
+	//t.Logf("IsRoot:%t (expect true)", root.IsRoot())
 	sup, _ := dn.Superior()
 	sub, _ := dn.Subordinate("cn=Private Mailing List")
-	t.Logf("IsRoot:%t (expect false)", sub.IsRoot())
+	//t.Logf("IsRoot:%t (expect false)", sub.IsRoot())
 
 	want := `dc=example,dc=com`
 	if got := string(root.Case); got != want {

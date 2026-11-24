@@ -440,6 +440,19 @@ func (r DistinguishedName) Subordinate(rdn string) (sub DistinguishedName, err e
 	return
 }
 
+func (r DistinguishedName) Sibling(rdn string) (sib DistinguishedName, err error) {
+	if r.IsRoot() {
+		err = syntaxError("cannot create a sibling of a root")
+	}
+
+	var sup DistinguishedName
+	if sup, err = r.Superior(); err == nil {
+		sib, err = sup.Subordinate(rdn)
+	}
+
+	return
+}
+
 func dN(x any) (ok bool, err error) {
 	switch tv := x.(type) {
 	case DistinguishedName:
