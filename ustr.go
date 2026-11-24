@@ -6,6 +6,14 @@ import (
 	"unicode/utf8"
 )
 
+// TODO: move to misc.go
+var (
+	putBE   = binary.BigEndian.PutUint64
+	getBE   = binary.BigEndian.Uint64
+	putBE32 = binary.BigEndian.PutUint32
+	getBE32 = binary.BigEndian.Uint32
+)
+
 /*
 UniversalString implements the Universal Character Set.
 
@@ -70,7 +78,7 @@ func (r UniversalString) Encode() ([]byte, error) {
 		if err := universalStringCharacterOutOfBounds(roon); err != nil {
 			return nil, err
 		}
-		binary.BigEndian.PutUint32(out[pos:], uint32(roon))
+		putBE32(out[pos:], uint32(roon))
 		pos += 4
 		i += sz
 	}
